@@ -36,6 +36,11 @@ def _deny(code: str, reason: str) -> Decision:
     return Decision(False, code, reason)
 
 
+def _platform_cap(db: Session) -> int:
+    row = db.get(GlobalState, "settings")
+    return int(row.value.get("policies", {}).get("dailyCap", 0)) if row else 0
+
+
 def can_act(
     db: Session,
     campaign_id: str,
@@ -46,9 +51,9 @@ def can_act(
     """The single gate every agent action passes through.
 
     Checks, in order: global kill switch, campaign state, agent pause,
-    channel pause, channel daily limit, then the global do-not-contact list.
-    Only campaigns in the requested scope are affected, so pausing one
-    campaign never blocks another.
+    channel pause, channel daily limit, platform daily cap, then the
+    global do-not-contact list. Only the requested campaign is affected,
+    so pausing one campaign never blocks another.
     """
     if get_kill_switch(db):
         return _deny("kill_switch", "The global kill switch is on")
@@ -86,6 +91,20 @@ def can_act(
         )
         if (sent_today or 0) >= ch["dailyLimit"]:
             return _deny("daily_limit", f"Daily limit of {ch['dailyLimit']} reached for {channel}")
+
+        cap = _platform_cap(db)
+        if cap:
+            total_today = db.scalar(
+                select(func.count())
+                .select_from(ActivityEvent)
+                .where(
+                    ActivityEvent.kind == "send",
+                    ActivityEvent.status == "completed",
+                    ActivityEvent.created_at >= start,
+                )
+            )
+            if (total_today or 0) >= cap:
+                return _deny("platform_cap", f"Platform daily cap of {cap} reached")
 
     if prospect_email:
         email = prospect_email.strip().lower()

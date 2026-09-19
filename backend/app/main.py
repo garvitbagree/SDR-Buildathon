@@ -10,9 +10,10 @@ load_dotenv()
 
 from app.db import Base, SessionLocal, engine  # noqa: E402
 from app.models import tables  # noqa: E402,F401  (registers the tables)
-from app.routers import activity, campaigns, control, prompts, reps  # noqa: E402
+from app.routers import activity, campaigns, conflicts, control, prompts, reps, settings  # noqa: E402
 from app.seed import seed  # noqa: E402
 from app.seed_extra import seed_extra  # noqa: E402
+from app.seed_ops import seed_ops  # noqa: E402
 from app.services.campaign_service import ServiceError  # noqa: E402
 
 
@@ -22,6 +23,7 @@ async def lifespan(_: FastAPI):
     with SessionLocal() as db:
         seed(db)
         seed_extra(db)
+        seed_ops(db)
     yield
 
 
@@ -48,6 +50,8 @@ app.include_router(control.router)
 app.include_router(prompts.router)
 app.include_router(reps.router)
 app.include_router(activity.router)
+app.include_router(conflicts.router)
+app.include_router(settings.router)
 
 
 @app.get("/health")

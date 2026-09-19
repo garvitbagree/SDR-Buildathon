@@ -170,3 +170,28 @@ class CampaignStats(Base):
 
     campaign_id: Mapped[str] = mapped_column(String, primary_key=True)
     data: Mapped[dict] = mapped_column(JSON, default=dict)
+
+class Prospect(Base):
+    __tablename__ = "prospects"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(String)
+    title: Mapped[str] = mapped_column(String, default="")
+    company: Mapped[str] = mapped_column(String, default="")
+    email: Mapped[str] = mapped_column(String, default="")
+    campaign_ids: Mapped[list] = mapped_column(JSON, default=list)
+    touches: Mapped[list] = mapped_column(JSON, default=list)
+
+
+class ConflictResolution(Base):
+    __tablename__ = "conflict_resolutions"
+
+    prospect_id: Mapped[str] = mapped_column(String, primary_key=True)
+    action: Mapped[str] = mapped_column(String)  # owner | cooldown | dnc | allow
+    owner_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    note: Mapped[str] = mapped_column(String, default="")
+    by: Mapped[str] = mapped_column(String)
+    time: Mapped[str] = mapped_column(String)
+    prev_campaign_ids: Mapped[list] = mapped_column(JSON, default=list)
+    added_suppression_id: Mapped[str | None] = mapped_column(String, nullable=True)
