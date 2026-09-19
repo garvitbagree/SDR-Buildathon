@@ -1,0 +1,79 @@
+export type CampaignStatus = "draft" | "live" | "paused" | "completed" | "archived";
+
+export type Channel = "linkedin" | "email" | "sms" | "voice";
+
+export type AgentKey =
+  | "icp_fitment"
+  | "research"
+  | "strategy"
+  | "personalisation"
+  | "conversation"
+  | "voice"
+  | "followup";
+
+export interface AgentConfig {
+  key: AgentKey;
+  name: string;
+  enabled: boolean;
+  paused: boolean;
+}
+
+export interface ChannelConfig {
+  channel: Channel;
+  enabled: boolean;
+  paused: boolean;
+  dailyLimit: number;
+}
+
+export interface Funnel {
+  discovered: number;
+  researched: number;
+  qualified: number;
+  contacted: number;
+  engaged: number;
+  meeting: number;
+  opportunity: number;
+}
+
+export interface Campaign {
+  id: string;
+  name: string;
+  description: string;
+  owner: string;
+  status: CampaignStatus;
+  icp: string;
+  geography: string;
+  targetRoles: string[];
+  createdAt: string;
+  updatedAt: string;
+  activePromptVersion: number;
+  agents: AgentConfig[];
+  channels: ChannelConfig[];
+  funnel: Funnel;
+  outreachCount: number;
+  meetings: number;
+  repIds: string[];
+}
+
+export interface PromptVersion {
+  id: string;
+  campaignId: string;
+  agentKey: AgentKey | "system";
+  version: number;
+  content: string;
+  author: string;
+  createdAt: string;
+  isActive: boolean;
+  note: string;
+}
+
+export interface Rep {
+  id: string;
+  name: string;
+  email: string;
+  status: "active" | "offboarded";
+  dailyLimit: number;
+  workingHours: string;
+  channels: Channel[];
+  campaignIds: string[];
+}
