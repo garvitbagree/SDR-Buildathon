@@ -124,7 +124,7 @@ export type ApprovalMode = "none" | "first_touch" | "all";
 
 export type EscalationKey = "pricing" | "human_request" | "objection";
 
-export type NewCampaign = Omit
+export type NewCampaign = Omit<
   Campaign,
   | "id"
   | "status"

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
-import { useSearchParams } from "react-router-dom";
-import { ChevronDown, Play, RotateCcw, Save } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { ArrowLeft, ChevronDown, Play, RotateCcw, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -494,6 +494,16 @@ export default function PromptManager() {
 
   return (
     <div className="space-y-6">
+      {params.get("campaign") && (
+        <Link
+            to={`/campaigns/${c.id}`}
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        >
+            <ArrowLeft className="h-4 w-4" />
+            Back to dashboard
+        </Link>
+      )}
+
       <div className="flex flex-wrap items-end justify-between gap-4">
         <h1 className="text-2xl font-semibold">Prompt manager</h1>
         <div className="flex items-center gap-3">
