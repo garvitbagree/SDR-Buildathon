@@ -97,3 +97,18 @@ export interface CampaignStats {
   outcomes: { positive: number; negative: number; neutral: number };
   workflows: { active: number; completed: number; failed: number };
 }
+
+export type PromptScope = AgentKey | "system";
+
+export type AuditAction = "created" | "activated" | "rolled_back";
+
+export interface AuditEntry {
+  id: string;
+  campaignId: string;
+  scope: PromptScope;
+  action: AuditAction;
+  version: number;
+  author: string;
+  time: string;
+  note: string;
+}

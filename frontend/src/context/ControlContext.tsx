@@ -1,6 +1,14 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
-import type { Campaign, CampaignStatus } from "@/types";
+import type {
+  AuditAction,
+  AuditEntry,
+  Campaign,
+  CampaignStatus,
+  PromptScope,
+  PromptVersion,
+} from "@/types";
 import { initialCampaigns } from "@/mocks/data";
+import { initialAudit, initialPrompts } from "@/mocks/prompts";
 
 interface ControlState {
   campaigns: Campaign[];
@@ -10,50 +18,104 @@ interface ControlState {
   duplicateCampaign: (id: string) => void;
   toggleAgent: (id: string, agentKey: string) => void;
   toggleChannel: (id: string, channel: string) => void;
+  prompts: PromptVersion[];
+  audit: AuditEntry[];
+  savePromptVersion: (campaignId: string, scope: PromptScope, content: string, note: string) => number;
+  activatePromptVersion: (campaignId: string, scope: PromptScope, version: number) => void;
 }
 
 const ControlContext = createContext<ControlState | null>(null);
 
+const CURRENT_USER = "Aarav Mehta";
+
 const today = () => new Date().toISOString().slice(0, 10);
+
+const stamp = () => {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+
+const uid = (prefix: string) => `${prefix}${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
 
 export function ControlProvider({ children }: { children: ReactNode }) {
   const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns);
   const [killSwitch, setKillSwitch] = useState(false);
+  const [prompts, setPrompts] = useState<PromptVersion[]>(initialPrompts);
+  const [audit, setAudit] = useState<AuditEntry[]>(initialAudit);
 
   const update = (id: string, fn: (c: Campaign) => Campaign) =>
     setCampaigns((prev) => prev.map((c) => (c.id === id ? fn(c) : c)));
 
+  const addAudit = (entry: Omit<AuditEntry, "id" | "author">) =>
+    setAudit((prev) => [{ ...entry, id: uid("a"), author: CURRENT_USER }, ...prev]);
+
   const setStatus = (id: string, status: CampaignStatus) =>
     update(id, (c) => ({ ...c, status, updatedAt: today() }));
 
-  const duplicateCampaign = (id: string) =>
-    setCampaigns((prev) => {
-      const src = prev.find((c) => c.id === id);
-      if (!src) return prev;
-      const copy: Campaign = {
-        ...src,
-        id: `c${Date.now()}`,
-        name: `${src.name} (copy)`,
-        status: "draft",
-        createdAt: today(),
-        updatedAt: today(),
-        activePromptVersion: 1,
-        agents: src.agents.map((a) => ({ ...a })),
-        channels: src.channels.map((ch) => ({ ...ch })),
-        funnel: {
-          discovered: 0,
-          researched: 0,
-          qualified: 0,
-          contacted: 0,
-          engaged: 0,
-          meeting: 0,
-          opportunity: 0,
-        },
-        outreachCount: 0,
-        meetings: 0,
-      };
-      return [...prev, copy];
-    });
+  const duplicateCampaign = (id: string) => {
+    const src = campaigns.find((c) => c.id === id);
+    if (!src) return;
+
+    const newId = uid("c");
+    const time = stamp();
+    const cloned = prompts
+      .filter((p) => p.campaignId === id && p.isActive)
+      .map(
+        (p): PromptVersion => ({
+          id: uid("p"),
+          campaignId: newId,
+          agentKey: p.agentKey,
+          version: 1,
+          content: p.content,
+          author: CURRENT_USER,
+          createdAt: time,
+          isActive: true,
+          note: `Copied from ${src.name} v${p.version}`,
+        })
+      );
+
+    const copy: Campaign = {
+      ...src,
+      id: newId,
+      name: `${src.name} (copy)`,
+      status: "draft",
+      createdAt: today(),
+      updatedAt: today(),
+      activePromptVersion: cloned.some((p) => p.agentKey === "system") ? 1 : 0,
+      agents: src.agents.map((a) => ({ ...a })),
+      channels: src.channels.map((ch) => ({ ...ch })),
+      funnel: {
+        discovered: 0,
+        researched: 0,
+        qualified: 0,
+        contacted: 0,
+        engaged: 0,
+        meeting: 0,
+        opportunity: 0,
+      },
+      outreachCount: 0,
+      meetings: 0,
+    };
+
+    setCampaigns((prev) => [...prev, copy]);
+    setPrompts((prev) => [...prev, ...cloned]);
+    setAudit((prev) => [
+      ...cloned.map(
+        (p): AuditEntry => ({
+          id: uid("a"),
+          campaignId: newId,
+          scope: p.agentKey,
+          action: "created",
+          version: 1,
+          author: CURRENT_USER,
+          time,
+          note: p.note,
+        })
+      ),
+      ...prev,
+    ]);
+  };
 
   const toggleAgent = (id: string, agentKey: string) =>
     update(id, (c) => ({
@@ -69,6 +131,52 @@ export function ControlProvider({ children }: { children: ReactNode }) {
       ),
     }));
 
+  const savePromptVersion = (campaignId: string, scope: PromptScope, content: string, note: string) => {
+    const existing = prompts.filter((p) => p.campaignId === campaignId && p.agentKey === scope);
+    const version = existing.reduce((m, p) => Math.max(m, p.version), 0) + 1;
+    const first = existing.length === 0;
+    const time = stamp();
+
+    setPrompts((prev) => [
+      ...prev,
+      {
+        id: uid("p"),
+        campaignId,
+        agentKey: scope,
+        version,
+        content,
+        author: CURRENT_USER,
+        createdAt: time,
+        isActive: first,
+        note,
+      },
+    ]);
+    if (first && scope === "system") {
+      update(campaignId, (c) => ({ ...c, activePromptVersion: version, updatedAt: today() }));
+    }
+    addAudit({ campaignId, scope, action: "created", version, time, note });
+    return version;
+  };
+
+  const activatePromptVersion = (campaignId: string, scope: PromptScope, version: number) => {
+    const current = prompts.find(
+      (p) => p.campaignId === campaignId && p.agentKey === scope && p.isActive
+    );
+    const action: AuditAction = current && version < current.version ? "rolled_back" : "activated";
+
+    setPrompts((prev) =>
+      prev.map((p) =>
+        p.campaignId === campaignId && p.agentKey === scope
+          ? { ...p, isActive: p.version === version }
+          : p
+      )
+    );
+    if (scope === "system") {
+      update(campaignId, (c) => ({ ...c, activePromptVersion: version, updatedAt: today() }));
+    }
+    addAudit({ campaignId, scope, action, version, time: stamp(), note: "" });
+  };
+
   return (
     <ControlContext.Provider
       value={{
@@ -79,6 +187,10 @@ export function ControlProvider({ children }: { children: ReactNode }) {
         duplicateCampaign,
         toggleAgent,
         toggleChannel,
+        prompts,
+        audit,
+        savePromptVersion,
+        activatePromptVersion,
       }}
     >
       {children}

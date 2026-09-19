@@ -1,4 +1,4 @@
-import type { AgentConfig, Campaign, ChannelConfig, PromptVersion, Rep } from "@/types";
+import type { AgentConfig, Campaign, ChannelConfig, Rep } from "@/types";
 
 const allAgents = (): AgentConfig[] => [
   { key: "icp_fitment", name: "ICP Fitment Agent", enabled: true, paused: false },
@@ -96,42 +96,6 @@ export const initialCampaigns: Campaign[] = [
   },
 ];
 
-export const promptVersions: PromptVersion[] = [
-  {
-    id: "p1",
-    campaignId: "c1",
-    agentKey: "system",
-    version: 1,
-    content: "You are an SDR for our product. Be concise and helpful.",
-    author: "Aarav Mehta",
-    createdAt: "2026-09-10",
-    isActive: false,
-    note: "Initial draft",
-  },
-  {
-    id: "p2",
-    campaignId: "c1",
-    agentKey: "system",
-    version: 2,
-    content: "You are an SDR selling to US SaaS CTOs. Lead with engineering productivity. Never claim features we do not have.",
-    author: "Aarav Mehta",
-    createdAt: "2026-09-14",
-    isActive: false,
-    note: "Added ICP and guardrail",
-  },
-  {
-    id: "p3",
-    campaignId: "c1",
-    agentKey: "system",
-    version: 3,
-    content:
-      "You are an SDR selling to US SaaS CTOs. Lead with engineering productivity and cite a relevant case study retrieved from the knowledge base. Never claim features we do not have. Escalate pricing questions to a human rep.",
-    author: "Priya Nair",
-    createdAt: "2026-09-18",
-    isActive: true,
-    note: "Added RAG citation and escalation rule",
-  },
-];
 
 export const initialReps: Rep[] = [
   {

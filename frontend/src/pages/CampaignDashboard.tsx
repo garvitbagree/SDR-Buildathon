@@ -414,7 +414,7 @@ export default function CampaignDashboard() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => navigate("/prompts")}>
+            <Button variant="outline" onClick={() => navigate(`/prompts?campaign=${c.id}`)}>
               <FileText className="mr-1.5 h-4 w-4" />
               Prompts
             </Button>

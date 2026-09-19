@@ -4,6 +4,7 @@ import AppLayout from "@/layouts/AppLayout";
 import Placeholder from "@/pages/Placeholder";
 import Campaigns from "@/pages/Campaigns";
 import CampaignDashboard from "@/pages/CampaignDashboard";
+import PromptManager from "@/pages/PromptManager";
 
 export default function App() {
   return (
@@ -16,7 +17,7 @@ export default function App() {
             <Route path="/campaigns/new" element={<Placeholder title="New campaign" />} />
             <Route path="/campaigns/:id/edit" element={<Placeholder title="Edit campaign" />} />
             <Route path="/campaigns/:id" element={<CampaignDashboard />} />
-            <Route path="/prompts" element={<Placeholder title="Prompt manager" />} />
+            <Route path="/prompts" element={<PromptManager />} />
             <Route path="/reps" element={<Placeholder title="Reps" />} />
             <Route path="/conflicts" element={<Placeholder title="Conflicts" />} />
           </Route>
