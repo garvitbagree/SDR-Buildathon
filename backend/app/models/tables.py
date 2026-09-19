@@ -116,3 +116,57 @@ class GlobalState(Base):
 
     key: Mapped[str] = mapped_column(String, primary_key=True)
     value: Mapped[dict] = mapped_column(JSON, default=dict)
+
+class AuditEntry(Base):
+    __tablename__ = "audit_entries"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    campaign_id: Mapped[str] = mapped_column(String, index=True)
+    scope: Mapped[str] = mapped_column(String)
+    action: Mapped[str] = mapped_column(String)  # created | activated | rolled_back
+    version: Mapped[int] = mapped_column(Integer)
+    author: Mapped[str] = mapped_column(String)
+    time: Mapped[str] = mapped_column(String)
+    note: Mapped[str] = mapped_column(String, default="")
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "campaignId": self.campaign_id,
+            "scope": self.scope,
+            "action": self.action,
+            "version": self.version,
+            "author": self.author,
+            "time": self.time,
+            "note": self.note,
+        }
+
+
+class Rep(Base):
+    __tablename__ = "reps"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(String)
+    email: Mapped[str] = mapped_column(String, unique=True)
+    status: Mapped[str] = mapped_column(String, default="active")
+    daily_limit: Mapped[int] = mapped_column(Integer, default=50)
+    working_hours: Mapped[str] = mapped_column(String, default="9:00 to 18:00 EST")
+    channels: Mapped[list] = mapped_column(JSON, default=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "email": self.email,
+            "status": self.status,
+            "dailyLimit": self.daily_limit,
+            "workingHours": self.working_hours,
+            "channels": self.channels,
+        }
+
+
+class CampaignStats(Base):
+    __tablename__ = "campaign_stats"
+
+    campaign_id: Mapped[str] = mapped_column(String, primary_key=True)
+    data: Mapped[dict] = mapped_column(JSON, default=dict)
