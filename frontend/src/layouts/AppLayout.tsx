@@ -14,16 +14,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useControl } from "@/context/ControlContext";
+import { useConflicts } from "@/context/ConflictContext";
+import { Settings } from "lucide-react";
 
 const nav = [
   { to: "/campaigns", label: "Campaigns", icon: LayoutDashboard },
   { to: "/prompts", label: "Prompts", icon: FileText },
   { to: "/reps", label: "Reps", icon: Users },
   { to: "/conflicts", label: "Conflicts", icon: GitMerge },
+  { to: "/settings", label: "Settings", icon: Settings },
 ];
 
 export default function AppLayout() {
   const { campaigns, killSwitch, setKillSwitch } = useControl();
+  const { openCount } = useConflicts();
   const [collapsed, setCollapsed] = useState(true);
   const liveCount = campaigns.filter((c) => c.status === "live").length;
   const pausedCount = campaigns.filter((c) => c.status === "paused").length;
@@ -75,8 +79,18 @@ export default function AppLayout() {
                 )
               }
             >
-              <Icon className="h-5 w-5 shrink-0" />
+              <span className="relative flex shrink-0">
+                <Icon className="h-5 w-5" />
+                {to === "/conflicts" && openCount > 0 && collapsed && (
+                  <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-card" />
+                )}
+              </span>
               {!collapsed && <span className="truncate">{label}</span>}
+              {!collapsed && to === "/conflicts" && openCount > 0 && (
+                <span className="ml-auto rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                  {openCount}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>
