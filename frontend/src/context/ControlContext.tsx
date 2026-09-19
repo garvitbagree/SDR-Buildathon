@@ -4,6 +4,7 @@ import type {
   AuditEntry,
   Campaign,
   CampaignStatus,
+  NewCampaign,
   PromptScope,
   PromptVersion,
 } from "@/types";
@@ -16,6 +17,8 @@ interface ControlState {
   setKillSwitch: (on: boolean) => void;
   setStatus: (id: string, status: CampaignStatus) => void;
   duplicateCampaign: (id: string) => void;
+  addCampaign: (input: NewCampaign, systemPrompt: string, goLive: boolean) => string;
+  updateCampaign: (id: string, patch: Partial<Campaign>) => void;
   toggleAgent: (id: string, agentKey: string) => void;
   toggleChannel: (id: string, channel: string) => void;
   prompts: PromptVersion[];
@@ -38,6 +41,16 @@ const stamp = () => {
 
 const uid = (prefix: string) => `${prefix}${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
 
+const emptyFunnel = {
+  discovered: 0,
+  researched: 0,
+  qualified: 0,
+  contacted: 0,
+  engaged: 0,
+  meeting: 0,
+  opportunity: 0,
+};
+
 export function ControlProvider({ children }: { children: ReactNode }) {
   const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns);
   const [killSwitch, setKillSwitch] = useState(false);
@@ -52,6 +65,47 @@ export function ControlProvider({ children }: { children: ReactNode }) {
 
   const setStatus = (id: string, status: CampaignStatus) =>
     update(id, (c) => ({ ...c, status, updatedAt: today() }));
+
+  const addCampaign = (input: NewCampaign, systemPrompt: string, goLive: boolean) => {
+    const id = uid("c");
+    const time = stamp();
+    const text = systemPrompt.trim();
+
+    const campaign: Campaign = {
+      ...input,
+      id,
+      status: goLive && !killSwitch ? "live" : "draft",
+      createdAt: today(),
+      updatedAt: today(),
+      activePromptVersion: text ? 1 : 0,
+      funnel: { ...emptyFunnel },
+      outreachCount: 0,
+      meetings: 0,
+    };
+
+    setCampaigns((prev) => [...prev, campaign]);
+    if (text) {
+      setPrompts((prev) => [
+        ...prev,
+        {
+          id: uid("p"),
+          campaignId: id,
+          agentKey: "system",
+          version: 1,
+          content: text,
+          author: CURRENT_USER,
+          createdAt: time,
+          isActive: true,
+          note: "Initial version",
+        },
+      ]);
+      addAudit({ campaignId: id, scope: "system", action: "created", version: 1, time, note: "Initial version" });
+    }
+    return id;
+  };
+
+  const updateCampaign = (id: string, patch: Partial<Campaign>) =>
+    update(id, (c) => ({ ...c, ...patch, updatedAt: today() }));
 
   const duplicateCampaign = (id: string) => {
     const src = campaigns.find((c) => c.id === id);
@@ -85,15 +139,7 @@ export function ControlProvider({ children }: { children: ReactNode }) {
       activePromptVersion: cloned.some((p) => p.agentKey === "system") ? 1 : 0,
       agents: src.agents.map((a) => ({ ...a })),
       channels: src.channels.map((ch) => ({ ...ch })),
-      funnel: {
-        discovered: 0,
-        researched: 0,
-        qualified: 0,
-        contacted: 0,
-        engaged: 0,
-        meeting: 0,
-        opportunity: 0,
-      },
+      funnel: { ...emptyFunnel },
       outreachCount: 0,
       meetings: 0,
     };
@@ -185,6 +231,8 @@ export function ControlProvider({ children }: { children: ReactNode }) {
         setKillSwitch,
         setStatus,
         duplicateCampaign,
+        addCampaign,
+        updateCampaign,
         toggleAgent,
         toggleChannel,
         prompts,

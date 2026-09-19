@@ -53,6 +53,13 @@ export interface Campaign {
   outreachCount: number;
   meetings: number;
   repIds: string[];
+  companyCriteria?: string;
+  exclusions?: string;
+  referenceProfiles?: string;
+  approvalMode?: ApprovalMode;
+  qualifyThreshold?: number;
+  confidenceThreshold?: number;
+  escalateOn?: EscalationKey[];
 }
 
 export interface PromptVersion {
@@ -112,3 +119,19 @@ export interface AuditEntry {
   time: string;
   note: string;
 }
+
+export type ApprovalMode = "none" | "first_touch" | "all";
+
+export type EscalationKey = "pricing" | "human_request" | "objection";
+
+export type NewCampaign = Omit
+  Campaign,
+  | "id"
+  | "status"
+  | "createdAt"
+  | "updatedAt"
+  | "activePromptVersion"
+  | "funnel"
+  | "outreachCount"
+  | "meetings"
+>;
