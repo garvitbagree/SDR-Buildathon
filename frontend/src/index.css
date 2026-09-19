@@ -128,3 +128,24 @@
     @apply font-sans;
     }
 }
+
+:root {
+  --radius: 0.75rem;
+  --background: #faf8f5;
+  --foreground: #1f1b16;
+  --card: #ffffff;
+  --card-foreground: #1f1b16;
+  --popover: #ffffff;
+  --popover-foreground: #1f1b16;
+  --primary: #e8710a;
+  --primary-foreground: #ffffff;
+  --secondary: #f3efe9;
+  --secondary-foreground: #1f1b16;
+  --muted: #f3efe9;
+  --muted-foreground: #7a7267;
+  --accent: #fcefe1;
+  --accent-foreground: #b45309;
+  --border: #e9e4dc;
+  --input: #e2dcd2;
+  --ring: #e8710a;
+}
