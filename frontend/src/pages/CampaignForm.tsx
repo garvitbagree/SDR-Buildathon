@@ -13,7 +13,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useControl } from "@/context/ControlContext";
-import { initialReps } from "@/mocks/data";
 import {
   AGENT_DEFS,
   APPROVAL_OPTIONS,
@@ -161,7 +160,7 @@ function RangeField({
 
 function FormBody({ campaign }: { campaign?: Campaign }) {
   const navigate = useNavigate();
-  const { campaigns, killSwitch, prompts, addCampaign, updateCampaign } = useControl();
+  const { campaigns, killSwitch, prompts, addCampaign, updateCampaign, reps } = useControl();
   const isEdit = !!campaign;
 
   const [f, setF] = useState<FormState>(() => buildInitial(campaign));
@@ -517,7 +516,7 @@ function FormBody({ campaign }: { campaign?: Campaign }) {
 
           <Section title="Reps" subtitle="Whose identity the outreach is sent under">
             <ul className="grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-3">
-              {initialReps.map((r) => {
+              {reps.map((r) => {
                 const on = f.repIds.includes(r.id);
                 const off = r.status === "offboarded";
                 return (

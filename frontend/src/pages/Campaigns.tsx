@@ -35,7 +35,6 @@ import {
 } from "@/components/ui/table";
 import StatusBadge from "@/components/StatusBadge";
 import { useControl } from "@/context/ControlContext";
-import { initialReps } from "@/mocks/data";
 import type { CampaignStatus } from "@/types";
 
 type Filter = "all" | CampaignStatus;
@@ -77,7 +76,7 @@ function StatCard({
 }
 
 export default function Campaigns() {
-  const { campaigns, killSwitch, setStatus, duplicateCampaign } = useControl();
+  const { campaigns, killSwitch, setStatus, duplicateCampaign, reps: allReps } = useControl();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
@@ -203,7 +202,7 @@ export default function Campaigns() {
               </TableRow>
             )}
             {rows.map((c) => {
-              const reps = initialReps.filter((r) => c.repIds.includes(r.id));
+              const reps = allReps.filter((r) => c.repIds.includes(r.id));
               const canComplete = c.status === "live" || c.status === "paused";
               const canArchive = c.status !== "archived";
 

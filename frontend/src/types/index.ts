@@ -82,7 +82,6 @@ export interface Rep {
   dailyLimit: number;
   workingHours: string;
   channels: Channel[];
-  campaignIds: string[];
 }
 
 export type ActivityStatus = "completed" | "failed" | "pending_approval" | "escalated";
@@ -135,3 +134,5 @@ export type NewCampaign = Omit<
   | "outreachCount"
   | "meetings"
 >;
+
+export type NewRep = Omit<Rep, "id" | "status">;

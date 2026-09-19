@@ -106,7 +106,6 @@ export const initialReps: Rep[] = [
     dailyLimit: 60,
     workingHours: "9:00 to 18:00 EST",
     channels: ["linkedin", "email", "voice"],
-    campaignIds: ["c1", "c3"],
   },
   {
     id: "r2",
@@ -116,7 +115,6 @@ export const initialReps: Rep[] = [
     dailyLimit: 50,
     workingHours: "9:00 to 17:00 PST",
     channels: ["linkedin", "email"],
-    campaignIds: ["c1"],
   },
   {
     id: "r3",
@@ -126,6 +124,5 @@ export const initialReps: Rep[] = [
     dailyLimit: 40,
     workingHours: "10:00 to 19:00 IST",
     channels: ["email", "voice", "linkedin"],
-    campaignIds: ["c2", "c3"],
   },
 ];

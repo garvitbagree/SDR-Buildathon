@@ -6,6 +6,7 @@ import Campaigns from "@/pages/Campaigns";
 import CampaignDashboard from "@/pages/CampaignDashboard";
 import CampaignForm from "@/pages/CampaignForm";
 import PromptManager from "@/pages/PromptManager";
+import Reps from "@/pages/Reps";
 
 export default function App() {
   return (
@@ -19,7 +20,7 @@ export default function App() {
             <Route path="/campaigns/:id/edit" element={<CampaignForm />} />
             <Route path="/campaigns/:id" element={<CampaignDashboard />} />
             <Route path="/prompts" element={<PromptManager />} />
-            <Route path="/reps" element={<Placeholder title="Reps" />} />
+            <Route path="/reps" element={<Reps />} />
             <Route path="/conflicts" element={<Placeholder title="Conflicts" />} />
           </Route>
         </Routes>

@@ -5,11 +5,14 @@ import type {
   Campaign,
   CampaignStatus,
   NewCampaign,
+  NewRep,
   PromptScope,
   PromptVersion,
+  Rep,
 } from "@/types";
-import { initialCampaigns } from "@/mocks/data";
+import { initialCampaigns, initialReps } from "@/mocks/data";
 import { initialAudit, initialPrompts } from "@/mocks/prompts";
+import { isOpen } from "@/lib/repRules";
 
 interface ControlState {
   campaigns: Campaign[];
@@ -25,6 +28,13 @@ interface ControlState {
   audit: AuditEntry[];
   savePromptVersion: (campaignId: string, scope: PromptScope, content: string, note: string) => number;
   activatePromptVersion: (campaignId: string, scope: PromptScope, version: number) => void;
+  reps: Rep[];
+  addRep: (input: NewRep) => string;
+  updateRep: (id: string, patch: Partial<Rep>) => void;
+  reactivateRep: (id: string) => void;
+  assignRep: (campaignId: string, repId: string) => void;
+  setRepCampaigns: (repId: string, campaignIds: string[]) => void;
+  offboardRep: (repId: string, replacements: Record<string, string>) => void;
 }
 
 const ControlContext = createContext<ControlState | null>(null);
@@ -56,6 +66,7 @@ export function ControlProvider({ children }: { children: ReactNode }) {
   const [killSwitch, setKillSwitch] = useState(false);
   const [prompts, setPrompts] = useState<PromptVersion[]>(initialPrompts);
   const [audit, setAudit] = useState<AuditEntry[]>(initialAudit);
+  const [reps, setReps] = useState<Rep[]>(initialReps);
 
   const update = (id: string, fn: (c: Campaign) => Campaign) =>
     setCampaigns((prev) => prev.map((c) => (c.id === id ? fn(c) : c)));
@@ -223,6 +234,50 @@ export function ControlProvider({ children }: { children: ReactNode }) {
     addAudit({ campaignId, scope, action, version, time: stamp(), note: "" });
   };
 
+  const addRep = (input: NewRep) => {
+    const id = uid("r");
+    setReps((prev) => [...prev, { ...input, id, status: "active" }]);
+    return id;
+  };
+
+  const updateRep = (id: string, patch: Partial<Rep>) =>
+    setReps((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+
+  const reactivateRep = (id: string) => updateRep(id, { status: "active" });
+
+  const assignRep = (campaignId: string, repId: string) =>
+    update(campaignId, (c) =>
+      c.repIds.includes(repId) ? c : { ...c, repIds: [...c.repIds, repId], updatedAt: today() }
+    );
+
+  const setRepCampaigns = (repId: string, campaignIds: string[]) =>
+    setCampaigns((prev) =>
+      prev.map((c) => {
+        if (!isOpen(c)) return c;
+        const has = c.repIds.includes(repId);
+        const want = campaignIds.includes(c.id);
+        if (has === want) return c;
+        return {
+          ...c,
+          repIds: want ? [...c.repIds, repId] : c.repIds.filter((r) => r !== repId),
+          updatedAt: today(),
+        };
+      })
+    );
+
+  const offboardRep = (repId: string, replacements: Record<string, string>) => {
+    setReps((prev) => prev.map((r) => (r.id === repId ? { ...r, status: "offboarded" } : r)));
+    setCampaigns((prev) =>
+      prev.map((c) => {
+        if (!isOpen(c) || !c.repIds.includes(repId)) return c;
+        const next = c.repIds.filter((r) => r !== repId);
+        const rep = replacements[c.id];
+        if (rep && rep !== "none" && !next.includes(rep)) next.push(rep);
+        return { ...c, repIds: next, updatedAt: today() };
+      })
+    );
+  };
+
   return (
     <ControlContext.Provider
       value={{
@@ -239,6 +294,13 @@ export function ControlProvider({ children }: { children: ReactNode }) {
         audit,
         savePromptVersion,
         activatePromptVersion,
+        reps,
+        addRep,
+        updateRep,
+        reactivateRep,
+        assignRep,
+        setRepCampaigns,
+        offboardRep,
       }}
     >
       {children}

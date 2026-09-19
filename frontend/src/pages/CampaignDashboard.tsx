@@ -28,7 +28,6 @@ import {
 import StatusBadge from "@/components/StatusBadge";
 import StatCard from "@/components/StatCard";
 import { useControl } from "@/context/ControlContext";
-import { initialReps } from "@/mocks/data";
 import { activityEvents, campaignStats, emptyStats } from "@/mocks/activity";
 import type { ActivityStatus, AgentKey, Channel, Funnel } from "@/types";
 
@@ -302,7 +301,7 @@ function DonutChart({
 export default function CampaignDashboard() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { campaigns, killSwitch, setStatus, toggleAgent, toggleChannel } = useControl();
+  const { campaigns, killSwitch, setStatus, toggleAgent, toggleChannel, reps: allReps } = useControl();
   const [decisions, setDecisions] = useState<Record<string, "approved" | "rejected">>({});
 
   const c = campaigns.find((x) => x.id === id);
@@ -322,7 +321,7 @@ export default function CampaignDashboard() {
   const events = activityEvents.filter((e) => e.campaignId === c.id);
   const running = c.status === "live" && !killSwitch;
   const editable = c.status !== "completed" && c.status !== "archived";
-  const reps = initialReps.filter((r) => c.repIds.includes(r.id));
+  const reps = allReps.filter((r) => c.repIds.includes(r.id));
   const activeChannels = c.channels.filter((ch) => ch.enabled && !ch.paused);
 
   const pending = events.filter((e) => e.status === "pending_approval" && !decisions[e.id]).length;
