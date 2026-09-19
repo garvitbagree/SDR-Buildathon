@@ -77,3 +77,23 @@ export interface Rep {
   channels: Channel[];
   campaignIds: string[];
 }
+
+export type ActivityStatus = "completed" | "failed" | "pending_approval" | "escalated";
+
+export interface ActivityEvent {
+  id: string;
+  campaignId: string;
+  agentKey: AgentKey;
+  action: string;
+  channel: Channel | null;
+  promptVersion: number;
+  time: string;
+  status: ActivityStatus;
+}
+
+export interface CampaignStats {
+  outreach: Record<Channel, number>;
+  followups: number;
+  outcomes: { positive: number; negative: number; neutral: number };
+  workflows: { active: number; completed: number; failed: number };
+}

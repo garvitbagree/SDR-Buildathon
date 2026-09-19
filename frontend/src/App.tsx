@@ -3,6 +3,7 @@ import { ControlProvider } from "@/context/ControlContext";
 import AppLayout from "@/layouts/AppLayout";
 import Placeholder from "@/pages/Placeholder";
 import Campaigns from "@/pages/Campaigns";
+import CampaignDashboard from "@/pages/CampaignDashboard";
 
 export default function App() {
   return (
@@ -14,7 +15,7 @@ export default function App() {
             <Route path="/campaigns" element={<Campaigns />} />
             <Route path="/campaigns/new" element={<Placeholder title="New campaign" />} />
             <Route path="/campaigns/:id/edit" element={<Placeholder title="Edit campaign" />} />
-            <Route path="/campaigns/:id" element={<Placeholder title="Campaign dashboard" />} />
+            <Route path="/campaigns/:id" element={<CampaignDashboard />} />
             <Route path="/prompts" element={<Placeholder title="Prompt manager" />} />
             <Route path="/reps" element={<Placeholder title="Reps" />} />
             <Route path="/conflicts" element={<Placeholder title="Conflicts" />} />
