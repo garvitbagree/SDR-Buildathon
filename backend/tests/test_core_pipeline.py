@@ -54,8 +54,8 @@ def test_core_pipeline_on_groq():
                                "sequence": [{"step": 1, "channel": "Phone"}, {"step": 2, "channel": "Email"}], "reasoning": "senior buyer"})
         if "Personalisation Agent" in system:
             counter["personalise"] += 1
-            body = "Hi, saw your team has a growing tooling queue. We speed teams up 10x. Best, [Your Name]" if counter["personalise"] == 1 \
-                else f"Hi, saw that {data['research']['signals'][0]} Best, {data['sender_name']}"
+            body = "Hi [First Name], saw your team has a growing tooling queue. We speed teams up 10x. Is that a priority?\n\nBest,\n[Your Name]" if counter["personalise"] == 1 \
+                else f"Hi, saw that {data['research']['signals'][0]}\n\nBest regards,\n{data['sender_name']}"
             return groq_reply({"subject": "Internal tooling", "body": body, "confidence": 0.9})
         raise AssertionError("unexpected agent: " + system[:80])
 
@@ -108,9 +108,9 @@ def test_core_pipeline_on_groq():
             flagged = [p for p in done if p.message["flags"]]
             assert len(flagged) == 1 and flagged[0].state == "READY_FOR_REVIEW", states
             kinds = " ".join(flagged[0].message["flags"])
-            assert "Unresolved placeholder" in kinds and "10x" in kinds, kinds
+            assert "Unresolved placeholder" in kinds and "10x" in kinds and "[Your Name]" not in flagged[0].message["body"], kinds
             clean = [p for p in done if not p.message["flags"]]
-            assert clean and all(p.state == "READY_TO_SEND" and "Aarav Mehta" in p.message["body"] and p.message["body"].endswith("Open to a call?") for p in clean)
+            assert clean and all(p.state == "READY_TO_SEND" and p.message["body"].endswith("Open to a call?\n\nBest,\nAarav Mehta") and p.message["body"].count("Aarav Mehta") == 1 and p.message["body"].count("Best") == 1 for p in clean)
             assert all(p.strategy["primary_channel"] in ("email", "linkedin", "voice") and p.strategy["secondary_channel"] != "fax" for p in done)
             assert all(p.strategy["sequence"][0]["channel"] != "voice" for p in done), "never a cold call first"
             assert all("internal tooling backlog" in (p.icp["pain_points"]) for p in qualified)

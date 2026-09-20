@@ -24,9 +24,31 @@ RULES = (
     "3. Social proof is allowed ONLY if a case study appears in knowledge. Otherwise leave it out. "
     "Never invent customers, metrics, speed-up claims (like '10x') or percentages.\n"
     "4. Plain language, like a smart person writing to a colleague. No jargon.\n"
-    "5. Sign off with sender_name exactly. Never write placeholders such as [Your Name] or [Company].\n"
-       "6. Do not claim what teams 'often' do or assume their problems. State the fact from research, then ask a question.\n"
+    "5. Do not write a sign-off and do not end with a question. The call to action and the sign-off are added after your body. "
+    "Never write placeholders such as [Your Name] or [Company].\n"
+    "6. Do not claim what teams 'often' do or assume their problems. State the fact from research, then connect it to the product.\n"
 )
+
+SIGNOFFS = {"best", "regards", "best regards", "kind regards", "warm regards", "thanks", "thank you", "cheers", "sincerely"}
+
+
+def _compose(body: str, cta: str, owner: str) -> str:
+    """Builds the final layout in code: body, then the call to action, then the sign-off. The model cannot break it."""
+    body = body.strip()
+    if cta:
+        body = body.replace(cta, "").rstrip()
+    lines = body.split("\n")
+    while lines:  # drop any sign-off the model wrote anyway
+        last = lines[-1].strip()
+        low = last.lower().rstrip(",.")
+        first_word = low.split(",")[0].split(" ")[0] if low else ""
+        if (not last or low in SIGNOFFS or low == owner.lower() or re.fullmatch(r"\[[^\]]{2,40}\]", last)
+                or (len(last) <= len(owner) + 20 and (first_word in SIGNOFFS or owner.lower() in low))):
+            lines.pop()
+        else:
+            break
+    body = "\n".join(lines).rstrip()
+    return "\n\n".join(x for x in (body, cta, f"Best,\n{owner}") if x)
 
 
 def _flags(text: str, sources: str) -> list[str]:
@@ -92,9 +114,7 @@ def run(db: Session, c: Campaign, p: CampaignProspect) -> tuple[dict, dict]:
         meta.update(source="local")
     meta["note"] = note
 
-    body = out.body.strip()
-    if cta and cta not in body:
-        body = f"{body}\n\n{cta}"
+    body = _compose(out.body, cta, c.owner)
     sources = json.dumps(payload["research"]) + " " + " ".join(d["content"] for d in docs) + " " + json.dumps(payload["campaign"])
     flags = _flags(f"{out.subject} {body}", sources)
     msg = out.model_dump()

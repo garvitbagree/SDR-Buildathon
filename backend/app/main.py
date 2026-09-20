@@ -11,12 +11,13 @@ load_dotenv()
 
 from app.db import Base, SessionLocal, engine  # noqa: E402
 from app.models import tables  # noqa: E402,F401  (registers the tables)
-from app.routers import activity, campaigns, conflicts, control, pipeline, prompts, reps, settings  # noqa: E402
+from app.routers import activity, campaigns, conflicts, control, conversations, pipeline, prompts, reps, settings  # noqa: E402
 from app.seed import seed  # noqa: E402
 from app.seed_agents import seed_agents  # noqa: E402
 from app.seed_extra import seed_extra  # noqa: E402
 from app.seed_ops import seed_ops  # noqa: E402
 from app.services import pipeline as pipeline_service  # noqa: E402
+from app.services import replies as replies_service  # noqa: E402
 from app.services.campaign_service import ServiceError  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
@@ -30,6 +31,7 @@ async def lifespan(_: FastAPI):
         seed_extra(db)
         seed_ops(db)
         seed_agents(db)
+    replies_service.register()  # adds the conversation and follow-up jobs to the worker
     if os.getenv("AUTO_WORKER", "1") == "1":
         pipeline_service.worker.start()
     yield
@@ -62,6 +64,7 @@ app.include_router(activity.router)
 app.include_router(conflicts.router)
 app.include_router(settings.router)
 app.include_router(pipeline.router)
+app.include_router(conversations.router)
 
 
 @app.get("/health")

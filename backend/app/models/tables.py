@@ -89,6 +89,7 @@ class ActivityEvent(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True)
     campaign_id: Mapped[str] = mapped_column(String, index=True)
     prospect_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    ref_id: Mapped[str | None] = mapped_column(String, nullable=True)    
     agent_key: Mapped[str] = mapped_column(String)
     action: Mapped[str] = mapped_column(Text)
     channel: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -276,3 +277,27 @@ class KnowledgeDoc(Base):
     title: Mapped[str] = mapped_column(String)
     content: Mapped[str] = mapped_column(Text)
     audience: Mapped[list] = mapped_column(JSON, default=list)  # ["*"] or campaign ids
+
+class ProspectMessage(Base):
+    __tablename__ = "prospect_messages"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    campaign_id: Mapped[str] = mapped_column(String, index=True)
+    prospect_id: Mapped[str] = mapped_column(String, index=True)
+    direction: Mapped[str] = mapped_column(String)  # out | in
+    channel: Mapped[str] = mapped_column(String, default="email")
+    kind: Mapped[str] = mapped_column(String, default="message")  # first_touch | followup | reply | inbound | call
+    subject: Mapped[str] = mapped_column(String, default="")
+    body: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String, default="sandbox")
+    meta: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id, "campaignId": self.campaign_id, "prospectId": self.prospect_id,
+            "direction": self.direction, "channel": self.channel, "kind": self.kind,
+            "subject": self.subject, "body": self.body, "status": self.status,
+            "meta": {k: v for k, v in (self.meta or {}).items() if k != "claim"},
+            "createdAt": self.created_at.isoformat(),
+        }
