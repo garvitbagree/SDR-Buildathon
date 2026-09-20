@@ -1,28 +1,38 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import { useControl } from "@/context/ControlContext";
-import { initialProspects } from "@/mocks/prospects";
 import {
-  DEFAULT_RULES,
-  applyResolution,
-  detect,
-  severityRank,
-  topSeverity,
-  type ConflictItem,
-  type Prospect,
-  type Resolution,
-  type ResolutionAction,
-  type Rules,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
+import { api } from "@/lib/api";
+import { useControl } from "@/context/ControlContext";
+import type {
+  ConflictItem,
+  Prospect,
+  Resolution,
+  ResolutionAction,
+  Rules,
 } from "@/lib/conflicts";
 
-interface ResolvedItem {
+export interface ResolvedItem {
   prospect: Prospect;
   resolution: Resolution;
+  activeCampaignIds: string[];
+}
+
+interface Payload {
+  monitored: number;
+  rules: Rules;
+  open: ConflictItem[];
+  resolved: ResolvedItem[];
 }
 
 interface ConflictState {
   monitored: number;
   rules: Rules;
-  setRules: (r: Rules) => void;
+  setRules: (r: Rules) => Promise<void>;
   open: ConflictItem[];
   openCount: number;
   resolved: ResolvedItem[];
@@ -30,93 +40,81 @@ interface ConflictState {
     prospectId: string,
     action: ResolutionAction,
     opts: { ownerId?: string; days?: number; note: string }
-  ) => void;
-  reopen: (prospectId: string) => void;
+  ) => Promise<string>;
+  reopen: (prospectId: string) => Promise<void>;
 }
+
+const EMPTY: Payload = {
+  monitored: 0,
+  rules: { maxTouches: 3, duplicateWindow: 3 },
+  open: [],
+  resolved: [],
+};
 
 const ConflictContext = createContext<ConflictState | null>(null);
 
-const CURRENT_USER = "Aarav Mehta";
-
-const stamp = () => {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-};
-
 export function ConflictProvider({ children }: { children: ReactNode }) {
   const { campaigns } = useControl();
-  const [prospects, setProspects] = useState<Prospect[]>(initialProspects);
-  const [rules, setRules] = useState<Rules>(DEFAULT_RULES);
-  const [resolutions, setResolutions] = useState<Record<string, Resolution>>({});
+  const [data, setData] = useState<Payload>(EMPTY);
 
-  const open = useMemo(
-    () =>
-      prospects
-        .filter((p) => !resolutions[p.id])
-        .map((p): ConflictItem => {
-          const issues = detect(p, campaigns, rules);
-          return { prospect: p, issues, severity: topSeverity(issues) };
-        })
-        .filter((i) => i.issues.length > 0)
-        .sort((a, b) => severityRank[b.severity] - severityRank[a.severity]),
-    [prospects, resolutions, campaigns, rules]
-  );
+  const load = useCallback(async () => {
+    try {
+      setData(await api<Payload>("/conflicts"));
+    } catch {
+      // keep the last data, the next refresh tries again
+    }
+  }, []);
 
-  const resolved = useMemo(
-    () =>
-      prospects
-        .filter((p) => resolutions[p.id])
-        .map((p): ResolvedItem => ({ prospect: p, resolution: resolutions[p.id] }))
-        .sort((a, b) => b.resolution.time.localeCompare(a.resolution.time)),
-    [prospects, resolutions]
-  );
+  useEffect(() => {
+    void load();
+  }, [load, campaigns]);
 
-  const resolve: ConflictState["resolve"] = (id, action, opts) => {
-    const p = prospects.find((x) => x.id === id);
-    if (!p) return;
-    setResolutions((prev) => ({
-      ...prev,
-      [id]: {
-        action,
-        ownerId: opts.ownerId,
-        days: opts.days,
-        note: opts.note,
-        by: CURRENT_USER,
-        time: stamp(),
-        prevCampaignIds: p.campaignIds,
-        prevSuppressed: p.suppressed,
-      },
-    }));
-    setProspects((prev) =>
-      prev.map((x) => (x.id === id ? applyResolution(x, campaigns, action, opts.ownerId) : x))
-    );
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!document.hidden) void load();
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [load]);
+
+  const setRules = async (r: Rules) => {
+    try {
+      setData(await api<Payload>("/conflicts/rules", { method: "PUT", body: r }));
+    } catch {
+      // out-of-range values are rejected, the last valid rules stay
+    }
   };
 
-  const reopen = (id: string) => {
-    const r = resolutions[id];
-    if (!r) return;
-    setProspects((prev) =>
-      prev.map((x) =>
-        x.id === id ? { ...x, campaignIds: r.prevCampaignIds, suppressed: r.prevSuppressed } : x
-      )
-    );
-    setResolutions((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
+  const resolve: ConflictState["resolve"] = async (prospectId, action, opts) => {
+    try {
+      setData(
+        await api<Payload>(`/conflicts/${prospectId}/resolve`, {
+          method: "POST",
+          body: { action, ownerId: opts.ownerId, days: opts.days, note: opts.note },
+        })
+      );
+      return "";
+    } catch (e) {
+      return e instanceof Error ? e.message : "Something went wrong";
+    }
+  };
+
+  const reopen = async (prospectId: string) => {
+    try {
+      setData(await api<Payload>(`/conflicts/${prospectId}/reopen`, { method: "POST" }));
+    } catch {
+      await load();
+    }
   };
 
   return (
     <ConflictContext.Provider
       value={{
-        monitored: prospects.length,
-        rules,
+        monitored: data.monitored,
+        rules: data.rules,
         setRules,
-        open,
-        openCount: open.length,
-        resolved,
+        open: data.open,
+        openCount: data.open.length,
+        resolved: data.resolved,
         resolve,
         reopen,
       }}

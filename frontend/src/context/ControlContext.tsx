@@ -1,6 +1,13 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
+import { api } from "@/lib/api";
 import type {
-  AuditAction,
   AuditEntry,
   Campaign,
   CampaignStatus,
@@ -10,277 +17,228 @@ import type {
   PromptVersion,
   Rep,
 } from "@/types";
-import { initialCampaigns, initialReps } from "@/mocks/data";
-import { initialAudit, initialPrompts } from "@/mocks/prompts";
-import { isOpen } from "@/lib/repRules";
 
 interface ControlState {
+  ready: boolean;
+  loadError: string;
+  reload: () => Promise<void>;
+  error: string;
+  clearError: () => void;
+
   campaigns: Campaign[];
   killSwitch: boolean;
-  setKillSwitch: (on: boolean) => void;
-  setStatus: (id: string, status: CampaignStatus) => void;
-  duplicateCampaign: (id: string) => void;
-  addCampaign: (input: NewCampaign, systemPrompt: string, goLive: boolean) => string;
-  updateCampaign: (id: string, patch: Partial<Campaign>) => void;
-  toggleAgent: (id: string, agentKey: string) => void;
-  toggleChannel: (id: string, channel: string) => void;
+  setKillSwitch: (on: boolean) => Promise<void>;
+  setStatus: (id: string, status: CampaignStatus) => Promise<void>;
+  duplicateCampaign: (id: string) => Promise<void>;
+  addCampaign: (input: NewCampaign, systemPrompt: string, goLive: boolean) => Promise<string | null>;
+  updateCampaign: (id: string, patch: Partial<Campaign>) => Promise<boolean>;
+  toggleAgent: (id: string, agentKey: string) => Promise<void>;
+  toggleChannel: (id: string, channel: string) => Promise<void>;
+
   prompts: PromptVersion[];
   audit: AuditEntry[];
-  savePromptVersion: (campaignId: string, scope: PromptScope, content: string, note: string) => number;
-  activatePromptVersion: (campaignId: string, scope: PromptScope, version: number) => void;
+  savePromptVersion: (
+    campaignId: string,
+    scope: PromptScope,
+    content: string,
+    note: string
+  ) => Promise<number | null>;
+  activatePromptVersion: (campaignId: string, scope: PromptScope, version: number) => Promise<void>;
+
   reps: Rep[];
-  addRep: (input: NewRep) => string;
-  updateRep: (id: string, patch: Partial<Rep>) => void;
-  reactivateRep: (id: string) => void;
-  assignRep: (campaignId: string, repId: string) => void;
-  setRepCampaigns: (repId: string, campaignIds: string[]) => void;
-  offboardRep: (repId: string, replacements: Record<string, string>) => void;
+  addRep: (input: NewRep) => Promise<string | null>;
+  updateRep: (id: string, patch: Partial<Rep>) => Promise<void>;
+  reactivateRep: (id: string) => Promise<void>;
+  assignRep: (campaignId: string, repId: string) => Promise<void>;
+  setRepCampaigns: (repId: string, campaignIds: string[]) => Promise<void>;
+  offboardRep: (repId: string, replacements: Record<string, string>) => Promise<void>;
 }
 
 const ControlContext = createContext<ControlState | null>(null);
 
-const CURRENT_USER = "Aarav Mehta";
+const errorText = (e: unknown) => (e instanceof Error ? e.message : "Something went wrong");
 
-const today = () => new Date().toISOString().slice(0, 10);
-
-const stamp = () => {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-};
-
-const uid = (prefix: string) => `${prefix}${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
-
-const emptyFunnel = {
-  discovered: 0,
-  researched: 0,
-  qualified: 0,
-  contacted: 0,
-  engaged: 0,
-  meeting: 0,
-  opportunity: 0,
-};
+const post = <T,>(path: string, body?: unknown) => api<T>(path, { method: "POST", body });
 
 export function ControlProvider({ children }: { children: ReactNode }) {
-  const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns);
-  const [killSwitch, setKillSwitch] = useState(false);
-  const [prompts, setPrompts] = useState<PromptVersion[]>(initialPrompts);
-  const [audit, setAudit] = useState<AuditEntry[]>(initialAudit);
-  const [reps, setReps] = useState<Rep[]>(initialReps);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [prompts, setPrompts] = useState<PromptVersion[]>([]);
+  const [audit, setAudit] = useState<AuditEntry[]>([]);
+  const [reps, setReps] = useState<Rep[]>([]);
+  const [killSwitch, setKillSwitchState] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [error, setError] = useState("");
 
-  const update = (id: string, fn: (c: Campaign) => Campaign) =>
-    setCampaigns((prev) => prev.map((c) => (c.id === id ? fn(c) : c)));
-
-  const addAudit = (entry: Omit<AuditEntry, "id" | "author">) =>
-    setAudit((prev) => [{ ...entry, id: uid("a"), author: CURRENT_USER }, ...prev]);
-
-  const setStatus = (id: string, status: CampaignStatus) =>
-    update(id, (c) => ({ ...c, status, updatedAt: today() }));
-
-  const addCampaign = (input: NewCampaign, systemPrompt: string, goLive: boolean) => {
-    const id = uid("c");
-    const time = stamp();
-    const text = systemPrompt.trim();
-
-    const campaign: Campaign = {
-      ...input,
-      id,
-      status: goLive && !killSwitch ? "live" : "draft",
-      createdAt: today(),
-      updatedAt: today(),
-      activePromptVersion: text ? 1 : 0,
-      funnel: { ...emptyFunnel },
-      outreachCount: 0,
-      meetings: 0,
-    };
-
-    setCampaigns((prev) => [...prev, campaign]);
-    if (text) {
-      setPrompts((prev) => [
-        ...prev,
-        {
-          id: uid("p"),
-          campaignId: id,
-          agentKey: "system",
-          version: 1,
-          content: text,
-          author: CURRENT_USER,
-          createdAt: time,
-          isActive: true,
-          note: "Initial version",
-        },
-      ]);
-      addAudit({ campaignId: id, scope: "system", action: "created", version: 1, time, note: "Initial version" });
-    }
-    return id;
-  };
-
-  const updateCampaign = (id: string, patch: Partial<Campaign>) =>
-    update(id, (c) => ({ ...c, ...patch, updatedAt: today() }));
-
-  const duplicateCampaign = (id: string) => {
-    const src = campaigns.find((c) => c.id === id);
-    if (!src) return;
-
-    const newId = uid("c");
-    const time = stamp();
-    const cloned = prompts
-      .filter((p) => p.campaignId === id && p.isActive)
-      .map(
-        (p): PromptVersion => ({
-          id: uid("p"),
-          campaignId: newId,
-          agentKey: p.agentKey,
-          version: 1,
-          content: p.content,
-          author: CURRENT_USER,
-          createdAt: time,
-          isActive: true,
-          note: `Copied from ${src.name} v${p.version}`,
-        })
-      );
-
-    const copy: Campaign = {
-      ...src,
-      id: newId,
-      name: `${src.name} (copy)`,
-      status: "draft",
-      createdAt: today(),
-      updatedAt: today(),
-      activePromptVersion: cloned.some((p) => p.agentKey === "system") ? 1 : 0,
-      agents: src.agents.map((a) => ({ ...a })),
-      channels: src.channels.map((ch) => ({ ...ch })),
-      funnel: { ...emptyFunnel },
-      outreachCount: 0,
-      meetings: 0,
-    };
-
-    setCampaigns((prev) => [...prev, copy]);
-    setPrompts((prev) => [...prev, ...cloned]);
-    setAudit((prev) => [
-      ...cloned.map(
-        (p): AuditEntry => ({
-          id: uid("a"),
-          campaignId: newId,
-          scope: p.agentKey,
-          action: "created",
-          version: 1,
-          author: CURRENT_USER,
-          time,
-          note: p.note,
-        })
-      ),
-      ...prev,
+  const loadAll = useCallback(async () => {
+    const [c, p, a, r, s] = await Promise.all([
+      api<Campaign[]>("/campaigns"),
+      api<PromptVersion[]>("/prompts"),
+      api<AuditEntry[]>("/audit"),
+      api<Rep[]>("/reps"),
+      api<{ killSwitch: boolean }>("/control/state"),
     ]);
-  };
+    setCampaigns(c);
+    setPrompts(p);
+    setAudit(a);
+    setReps(r);
+    setKillSwitchState(s.killSwitch);
+  }, []);
 
-  const toggleAgent = (id: string, agentKey: string) =>
-    update(id, (c) => ({
-      ...c,
-      agents: c.agents.map((a) => (a.key === agentKey ? { ...a, paused: !a.paused } : a)),
-    }));
-
-  const toggleChannel = (id: string, channel: string) =>
-    update(id, (c) => ({
-      ...c,
-      channels: c.channels.map((ch) =>
-        ch.channel === channel ? { ...ch, paused: !ch.paused } : ch
-      ),
-    }));
-
-  const savePromptVersion = (campaignId: string, scope: PromptScope, content: string, note: string) => {
-    const existing = prompts.filter((p) => p.campaignId === campaignId && p.agentKey === scope);
-    const version = existing.reduce((m, p) => Math.max(m, p.version), 0) + 1;
-    const first = existing.length === 0;
-    const time = stamp();
-
-    setPrompts((prev) => [
-      ...prev,
-      {
-        id: uid("p"),
-        campaignId,
-        agentKey: scope,
-        version,
-        content,
-        author: CURRENT_USER,
-        createdAt: time,
-        isActive: first,
-        note,
-      },
-    ]);
-    if (first && scope === "system") {
-      update(campaignId, (c) => ({ ...c, activePromptVersion: version, updatedAt: today() }));
+  const reload = useCallback(async () => {
+    try {
+      await loadAll();
+      setLoadError("");
+      setReady(true);
+    } catch (e) {
+      setLoadError(errorText(e));
     }
-    addAudit({ campaignId, scope, action: "created", version, time, note });
-    return version;
-  };
+  }, [loadAll]);
 
-  const activatePromptVersion = (campaignId: string, scope: PromptScope, version: number) => {
-    const current = prompts.find(
-      (p) => p.campaignId === campaignId && p.agentKey === scope && p.isActive
-    );
-    const action: AuditAction = current && version < current.version ? "rolled_back" : "activated";
-
-    setPrompts((prev) =>
-      prev.map((p) =>
-        p.campaignId === campaignId && p.agentKey === scope
-          ? { ...p, isActive: p.version === version }
-          : p
-      )
-    );
-    if (scope === "system") {
-      update(campaignId, (c) => ({ ...c, activePromptVersion: version, updatedAt: today() }));
+  const sync = useCallback(async () => {
+    try {
+      await loadAll();
+    } catch {
+      // keep the current data
     }
-    addAudit({ campaignId, scope, action, version, time: stamp(), note: "" });
+  }, [loadAll]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  useEffect(() => {
+    if (!ready) return;
+    const timer = setInterval(async () => {
+      if (document.hidden) return;
+      try {
+        const [c, s] = await Promise.all([
+          api<Campaign[]>("/campaigns"),
+          api<{ killSwitch: boolean }>("/control/state"),
+        ]);
+        setCampaigns(c);
+        setKillSwitchState(s.killSwitch);
+      } catch {
+        // try again on the next tick
+      }
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [ready]);
+
+  async function run<T>(fn: () => Promise<T>): Promise<T | null> {
+    try {
+      setError("");
+      return await fn();
+    } catch (e) {
+      setError(errorText(e));
+      return null;
+    }
+  }
+
+  const putCampaign = (c: Campaign) =>
+    setCampaigns((prev) => prev.map((x) => (x.id === c.id ? c : x)));
+
+  const setKillSwitch = async (on: boolean) => {
+    const r = await run(() => post<{ killSwitch: boolean }>("/control/kill-switch", { on }));
+    if (r) setKillSwitchState(r.killSwitch);
   };
 
-  const addRep = (input: NewRep) => {
-    const id = uid("r");
-    setReps((prev) => [...prev, { ...input, id, status: "active" }]);
-    return id;
+  const setStatus = async (id: string, status: CampaignStatus) => {
+    const c = await run(() => post<Campaign>(`/campaigns/${id}/status`, { status }));
+    if (c) putCampaign(c);
   };
 
-  const updateRep = (id: string, patch: Partial<Rep>) =>
-    setReps((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  const addCampaign = async (input: NewCampaign, systemPrompt: string, goLive: boolean) => {
+    const c = await run(() => post<Campaign>("/campaigns", { ...input, systemPrompt, goLive }));
+    if (!c) return null;
+    await sync();
+    return c.id;
+  };
 
-  const reactivateRep = (id: string) => updateRep(id, { status: "active" });
+  const updateCampaign = async (id: string, patch: Partial<Campaign>) => {
+    const c = await run(() => api<Campaign>(`/campaigns/${id}`, { method: "PATCH", body: patch }));
+    if (c) putCampaign(c);
+    return c !== null;
+  };
 
-  const assignRep = (campaignId: string, repId: string) =>
-    update(campaignId, (c) =>
-      c.repIds.includes(repId) ? c : { ...c, repIds: [...c.repIds, repId], updatedAt: today() }
+  const duplicateCampaign = async (id: string) => {
+    const c = await run(() => post<Campaign>(`/campaigns/${id}/duplicate`));
+    if (c) await sync();
+  };
+
+  const toggleAgent = async (id: string, agentKey: string) => {
+    const c = await run(() => post<Campaign>(`/campaigns/${id}/agents/${agentKey}/toggle`));
+    if (c) putCampaign(c);
+  };
+
+  const toggleChannel = async (id: string, channel: string) => {
+    const c = await run(() => post<Campaign>(`/campaigns/${id}/channels/${channel}/toggle`));
+    if (c) putCampaign(c);
+  };
+
+  const savePromptVersion = async (
+    campaignId: string,
+    scope: PromptScope,
+    content: string,
+    note: string
+  ) => {
+    const p = await run(() =>
+      post<PromptVersion>(`/campaigns/${campaignId}/prompts`, { scope, content, note })
     );
+    if (!p) return null;
+    await sync();
+    return p.version;
+  };
 
-  const setRepCampaigns = (repId: string, campaignIds: string[]) =>
-    setCampaigns((prev) =>
-      prev.map((c) => {
-        if (!isOpen(c)) return c;
-        const has = c.repIds.includes(repId);
-        const want = campaignIds.includes(c.id);
-        if (has === want) return c;
-        return {
-          ...c,
-          repIds: want ? [...c.repIds, repId] : c.repIds.filter((r) => r !== repId),
-          updatedAt: today(),
-        };
-      })
+  const activatePromptVersion = async (campaignId: string, scope: PromptScope, version: number) => {
+    const p = await run(() =>
+      post<PromptVersion>(`/campaigns/${campaignId}/prompts/activate`, { scope, version })
     );
+    if (p) await sync();
+  };
 
-  const offboardRep = (repId: string, replacements: Record<string, string>) => {
-    setReps((prev) => prev.map((r) => (r.id === repId ? { ...r, status: "offboarded" } : r)));
-    setCampaigns((prev) =>
-      prev.map((c) => {
-        if (!isOpen(c) || !c.repIds.includes(repId)) return c;
-        const next = c.repIds.filter((r) => r !== repId);
-        const rep = replacements[c.id];
-        if (rep && rep !== "none" && !next.includes(rep)) next.push(rep);
-        return { ...c, repIds: next, updatedAt: today() };
-      })
+  const addRep = async (input: NewRep) => {
+    const r = await run(() => post<Rep>("/reps", input));
+    if (!r) return null;
+    await sync();
+    return r.id;
+  };
+
+  const updateRep = async (id: string, patch: Partial<Rep>) => {
+    const r = await run(() => api<Rep>(`/reps/${id}`, { method: "PATCH", body: patch }));
+    if (r) await sync();
+  };
+
+  const reactivateRep = async (id: string) => {
+    const r = await run(() => post<Rep>(`/reps/${id}/reactivate`));
+    if (r) await sync();
+  };
+
+  const assignRep = async (campaignId: string, repId: string) => {
+    const c = await run(() => post<Campaign>(`/campaigns/${campaignId}/reps/${repId}`));
+    if (c) putCampaign(c);
+  };
+
+  const setRepCampaigns = async (repId: string, campaignIds: string[]) => {
+    const r = await run(() =>
+      api(`/reps/${repId}/campaigns`, { method: "PUT", body: { campaignIds } })
     );
+    if (r) await sync();
+  };
+
+  const offboardRep = async (repId: string, replacements: Record<string, string>) => {
+    const r = await run(() => post(`/reps/${repId}/offboard`, { replacements }));
+    if (r) await sync();
   };
 
   return (
     <ControlContext.Provider
       value={{
+        ready,
+        loadError,
+        reload,
+        error,
+        clearError: () => setError(""),
         campaigns,
         killSwitch,
         setKillSwitch,

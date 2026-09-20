@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -28,7 +28,7 @@ import {
 import StatusBadge from "@/components/StatusBadge";
 import StatCard from "@/components/StatCard";
 import { useControl } from "@/context/ControlContext";
-import { activityEvents, campaignStats, emptyStats } from "@/mocks/activity";
+import { useCampaignData } from "@/hooks/useCampaignData";
 import type { ActivityStatus, AgentKey, Channel, Funnel } from "@/types";
 
 const channelLabels: Record<Channel, string> = {
@@ -63,6 +63,8 @@ const activityStyles: Record<ActivityStatus, { label: string; cls: string }> = {
   failed: { label: "Failed", cls: "border-red-200 bg-red-50 text-red-700" },
   pending_approval: { label: "Needs approval", cls: "border-amber-200 bg-amber-50 text-amber-800" },
   escalated: { label: "Escalated", cls: "border-violet-200 bg-violet-50 text-violet-700" },
+    approved: { label: "Approved", cls: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+  rejected: { label: "Rejected", cls: "border-stone-200 bg-stone-50 text-stone-600" },
 };
 
 const stateStyles: Record<string, string> = {
@@ -302,7 +304,7 @@ export default function CampaignDashboard() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { campaigns, killSwitch, setStatus, toggleAgent, toggleChannel, reps: allReps } = useControl();
-  const [decisions, setDecisions] = useState<Record<string, "approved" | "rejected">>({});
+  const data = useCampaignData(id);
 
   const c = campaigns.find((x) => x.id === id);
 
@@ -317,25 +319,20 @@ export default function CampaignDashboard() {
     );
   }
 
-  const stats = campaignStats[c.id] ?? emptyStats;
-  const events = activityEvents.filter((e) => e.campaignId === c.id);
+  const { stats, decide } = data;
+  const events = data.events.filter((e) => e.campaignId === c.id);
   const running = c.status === "live" && !killSwitch;
   const editable = c.status !== "completed" && c.status !== "archived";
   const reps = allReps.filter((r) => c.repIds.includes(r.id));
   const activeChannels = c.channels.filter((ch) => ch.enabled && !ch.paused);
 
-  const pending = events.filter((e) => e.status === "pending_approval" && !decisions[e.id]).length;
+  const pending = events.filter((e) => e.status === "pending_approval").length;
   const escalations = events.filter((e) => e.status === "escalated").length;
   const { positive, negative, neutral } = stats.outcomes;
   const activeWorkflows = running ? stats.workflows.active : 0;
 
   const attention = events
-    .filter(
-      (e) =>
-        (e.status === "pending_approval" && !decisions[e.id]) ||
-        e.status === "escalated" ||
-        e.status === "failed"
-    )
+    .filter((e) => e.status === "pending_approval" || e.status === "escalated" || e.status === "failed")
     .slice(0, 5);
 
   const steps = stages
@@ -765,7 +762,6 @@ export default function CampaignDashboard() {
             )}
             {events.map((e) => {
               const agent = c.agents.find((a) => a.key === e.agentKey);
-              const decision = decisions[e.id];
               const style = activityStyles[e.status];
               return (
                 <TableRow key={e.id}>
@@ -789,34 +785,17 @@ export default function CampaignDashboard() {
                     </Pill>
                   </TableCell>
                   <TableCell className="pr-5">
-                    {e.status === "pending_approval" && !decision ? (
+                    {e.status === "pending_approval" ? (
                       <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => setDecisions((d) => ({ ...d, [e.id]: "approved" }))}
-                        >
+                        <Button size="sm" onClick={() => void decide(e.id, "approved")}>
                           <Check className="mr-1 h-3.5 w-3.5" />
                           Approve
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setDecisions((d) => ({ ...d, [e.id]: "rejected" }))}
-                        >
+                        <Button size="sm" variant="outline" onClick={() => void decide(e.id, "rejected")}>
                           <X className="mr-1 h-3.5 w-3.5" />
                           Reject
                         </Button>
                       </div>
-                    ) : decision ? (
-                      <Pill
-                        cls={
-                          decision === "approved"
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                            : "border-stone-200 bg-stone-50 text-stone-600"
-                        }
-                      >
-                        {decision === "approved" ? "Approved" : "Rejected"}
-                      </Pill>
                     ) : (
                       <Pill cls={style.cls}>{style.label}</Pill>
                     )}

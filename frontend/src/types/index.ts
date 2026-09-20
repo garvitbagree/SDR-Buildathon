@@ -84,7 +84,13 @@ export interface Rep {
   channels: Channel[];
 }
 
-export type ActivityStatus = "completed" | "failed" | "pending_approval" | "escalated";
+export type ActivityStatus =
+  | "completed"
+  | "failed"
+  | "pending_approval"
+  | "escalated"
+  | "approved"
+  | "rejected";
 
 export interface ActivityEvent {
   id: string;
@@ -95,6 +101,8 @@ export interface ActivityEvent {
   promptVersion: number;
   time: string;
   status: ActivityStatus;
+  source?: "local" | "dronahq";
+  mode?: "live" | "sandbox";
 }
 
 export interface CampaignStats {

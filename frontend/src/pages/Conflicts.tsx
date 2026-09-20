@@ -39,9 +39,6 @@ import { useControl } from "@/context/ControlContext";
 import { useConflicts } from "@/context/ConflictContext";
 import {
   CHANNEL_LABEL,
-  activeCampaignIds,
-  recentCount,
-  recommend,
   type ConflictItem,
   type IssueKey,
   type Prospect,
@@ -113,9 +110,8 @@ function ReviewDialog({ item, onClose }: { item: ConflictItem; onClose: () => vo
   const { campaigns } = useControl();
   const { resolve } = useConflicts();
   const { prospect: p, issues } = item;
-
-  const active = activeCampaignIds(p, campaigns);
-  const rec = recommend(p, campaigns, issues);
+  const active = item.activeCampaignIds;
+  const rec = item.recommended;
   const suppressed = issues.some((i) => i.key === "suppressed");
   const multi = active.length > 1;
   const nameOf = (id: string) => campaigns.find((c) => c.id === id)?.name ?? "Unknown campaign";
@@ -124,6 +120,7 @@ function ReviewDialog({ item, onClose }: { item: ConflictItem; onClose: () => vo
   const [ownerId, setOwnerId] = useState(rec.ownerId ?? active[0] ?? "");
   const [days, setDays] = useState("7");
   const [note, setNote] = useState("");
+  const [error, setError] = useState("");
 
   const options: { key: ResolutionAction; title: string; desc: string; show: boolean }[] = [
     {
@@ -158,13 +155,14 @@ function ReviewDialog({ item, onClose }: { item: ConflictItem; onClose: () => vo
 
   const touches = [...p.touches].sort((a, b) => a.daysAgo - b.daysAgo);
 
-  const apply = () => {
-    resolve(p.id, action, {
+  const apply = async () => {
+    const msg = await resolve(p.id, action, {
       ownerId: action === "owner" ? ownerId : undefined,
       days: action === "cooldown" ? Number(days) : undefined,
       note: note.trim(),
     });
-    onClose();
+    if (msg) setError(msg);
+    else onClose();
   };
 
   return (
@@ -288,6 +286,8 @@ function ReviewDialog({ item, onClose }: { item: ConflictItem; onClose: () => vo
             placeholder="Add a note (shown in the resolved list)"
           />
         </div>
+
+        {error && <p className="text-xs text-red-600">{error}</p>}
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
@@ -468,7 +468,7 @@ export default function Conflicts() {
                   </TableCell>
                 </TableRow>
               )}
-              {openRows.map(({ prospect: p, issues, severity }) => (
+              {openRows.map(({ prospect: p, issues, severity, activeCampaignIds: activeIds, recentTouches }) => (
                 <TableRow key={p.id} className="cursor-pointer" onClick={() => setReviewId(p.id)}>
                   <TableCell className="pl-5">
                     <div className="font-medium">{p.name}</div>
@@ -477,7 +477,7 @@ export default function Conflicts() {
                     </div>
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
-                    {chips(activeCampaignIds(p, campaigns))}
+                    {chips(activeIds)}
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1.5">
@@ -488,7 +488,7 @@ export default function Conflicts() {
                       ))}
                     </div>
                   </TableCell>
-                  <TableCell className="tabular-nums">{recentCount(p, campaigns)}</TableCell>
+                  <TableCell className="tabular-nums">{recentTouches}</TableCell>
                   <TableCell>
                     <Pill cls={severityStyles[severity].cls}>{severityStyles[severity].label}</Pill>
                   </TableCell>
@@ -529,7 +529,7 @@ export default function Conflicts() {
                   </TableCell>
                 </TableRow>
               )}
-              {resolvedRows.map(({ prospect: p, resolution: r }) => (
+              {resolvedRows.map(({ prospect: p, resolution: r, activeCampaignIds: activeIds }) => (
                 <TableRow key={p.id}>
                   <TableCell className="pl-5">
                     <div className="font-medium">{p.name}</div>
@@ -537,7 +537,7 @@ export default function Conflicts() {
                       {p.title} · {p.company}
                     </div>
                   </TableCell>
-                  <TableCell>{chips(activeCampaignIds(p, campaigns))}</TableCell>
+                  <TableCell>{chips(activeIds)}</TableCell>
                   <TableCell className="whitespace-normal">
                     <div className="text-sm">{describe(r)}</div>
                     {r.note && <div className="text-xs text-muted-foreground">{r.note}</div>}

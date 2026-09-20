@@ -621,8 +621,8 @@ function SuppressionTab() {
     (s) => !q || s.value.includes(q) || s.reason.toLowerCase().includes(q)
   );
 
-  const add = () => {
-    const err = addSuppressed(value, reason);
+  const add = async () => {
+    const err = await addSuppressed(value, reason);
     setError(err);
     if (!err) {
       setValue("");
@@ -750,8 +750,8 @@ function TeamTab() {
     setError("");
   };
 
-  const invite = () => {
-    const err = inviteUser(name, email, role);
+  const invite = async () => {
+    const err = await inviteUser(name, email, role);
     setError(err);
     if (!err) close();
   };

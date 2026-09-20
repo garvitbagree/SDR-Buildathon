@@ -26,7 +26,7 @@ const nav = [
 ];
 
 export default function AppLayout() {
-  const { campaigns, killSwitch, setKillSwitch } = useControl();
+  const { campaigns, killSwitch, setKillSwitch, error, clearError } = useControl();
   const { openCount } = useConflicts();
   const [collapsed, setCollapsed] = useState(true);
   const liveCount = campaigns.filter((c) => c.status === "live").length;
@@ -136,6 +136,15 @@ export default function AppLayout() {
         {killSwitch && (
           <div className="bg-red-600 px-6 py-2 text-sm text-white">
             Global kill switch is ON. No agent can take external actions on any campaign.
+          </div>
+        )}
+
+        {error && (
+          <div className="flex items-center justify-between gap-4 bg-amber-100 px-6 py-2 text-sm text-amber-900">
+            <span>{error}</span>
+            <button onClick={clearError} className="text-xs font-medium underline">
+              Dismiss
+            </button>
           </div>
         )}
 

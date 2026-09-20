@@ -242,7 +242,7 @@ function FormBody({ campaign }: { campaign?: Campaign }) {
   ];
   const ready = checks.every((c) => c.ok);
 
-  const save = (goLive: boolean) => {
+  const save = async (goLive: boolean) => {
     setSubmitted(true);
     if (hasErrors) return;
 
@@ -276,11 +276,10 @@ function FormBody({ campaign }: { campaign?: Campaign }) {
     };
 
     if (campaign) {
-      updateCampaign(campaign.id, data);
-      navigate(`/campaigns/${campaign.id}`);
+      if (await updateCampaign(campaign.id, data)) navigate(`/campaigns/${campaign.id}`);
     } else {
-      const id = addCampaign(data, f.systemPrompt, goLive);
-      navigate(`/campaigns/${id}`);
+      const id = await addCampaign(data, f.systemPrompt, goLive);
+      if (id) navigate(`/campaigns/${id}`);
     }
   };
 

@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/table";
 import StatusBadge from "@/components/StatusBadge";
 import { useControl } from "@/context/ControlContext";
-import { activityEvents } from "@/mocks/activity";
+import { useCampaignData } from "@/hooks/useCampaignData";
 import { cn } from "@/lib/utils";
 import type { AuditAction, Campaign, CampaignStatus, PromptScope } from "@/types";
 import {
@@ -112,6 +112,7 @@ function ScopeEditor({
   scopeName: string;
 }) {
   const { prompts, audit, savePromptVersion, activatePromptVersion } = useControl();
+  const { events } = useCampaignData(campaign.id);
 
   const versions = prompts
     .filter((p) => p.campaignId === campaign.id && p.agentKey === scope)
@@ -146,7 +147,7 @@ function ScopeEditor({
     s === "system" ? "System prompt" : campaign.agents.find((a) => a.key === s)?.name ?? s;
 
   const usedCount = (version: number) =>
-    activityEvents.filter((e) => e.campaignId === campaign.id && e.promptVersion === version).length;
+    events.filter((e) => e.campaignId === campaign.id && e.promptVersion === version).length;
 
   const pick = (v: { version: number; content: string }) => {
     setSelected(v.version);
@@ -154,8 +155,9 @@ function ScopeEditor({
     setNote("");
   };
 
-  const handleSave = () => {
-    const version = savePromptVersion(campaign.id, scope, trimmed, note.trim());
+  const handleSave = async () => {
+    const version = await savePromptVersion(campaign.id, scope, trimmed, note.trim());
+    if (version === null) return;
     setSelected(version);
     setDraft(trimmed);
     setNote("");
