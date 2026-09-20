@@ -1,13 +1,18 @@
 import json
+import logging
 import re
 
 from sqlalchemy.orm import Session
 
-from app.agents.base import build_system, call_dronahq, empty_meta, provider
+from app.agents.base import build_system, empty_meta, provider
 from app.agents.schemas import MessageOut
+from app.integrations.dronahq import run_personalisation
+from app.integrations.dronahq.client import get_config
 from app.llm import generate_json, model_for
 from app.models.tables import Campaign, CampaignProspect
 from app.rag import retrieve
+
+log = logging.getLogger("sdr.personalisation")
 
 ROLE = (
     "Personalisation Agent. Write one short, specific first-touch message using only the research and "
@@ -91,12 +96,15 @@ def run(db: Session, c: Campaign, p: CampaignProspect) -> tuple[dict, dict]:
     }
 
     out, meta, note = None, None, ""
-    if provider("PERSONALISATION_PROVIDER") == "dronahq":
+    drona_url, _ = get_config("PERSONALISATION")
+    use_drona = provider("PERSONALISATION_PROVIDER") == "dronahq" or (drona_url and provider("PERSONALISATION_PROVIDER") != "local")
+    if use_drona:
         try:
-            out = MessageOut.model_validate(call_dronahq("PERSONALISATION", payload))
+            out = run_personalisation(c, p, docs, channel, cta)
             meta = empty_meta("dronahq")
         except Exception as e:
             note = f"DronaHQ failed ({type(e).__name__}), used the local agent"
+            log.warning("[PERSONALISATION] %s: %s", p.id, note)
 
     if out is None:
         model, tier = model_for(db, "Personalised email writing")

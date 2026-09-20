@@ -1,11 +1,16 @@
 import json
+import logging
 
 from sqlalchemy.orm import Session
 
-from app.agents.base import build_system, call_dronahq, empty_meta, provider
+from app.agents.base import build_system, empty_meta, provider
 from app.agents.schemas import IcpOut
+from app.integrations.dronahq import run_icp
+from app.integrations.dronahq.client import get_config
 from app.llm import generate_json, model_for
 from app.models.tables import Campaign, CampaignProspect
+
+log = logging.getLogger("sdr.icp")
 
 ROLE = (
     "ICP Fitment Agent. Decide whether the prospect fits this campaign's ideal customer profile. "
@@ -49,12 +54,15 @@ def run(db: Session, c: Campaign, p: CampaignProspect) -> tuple[IcpOut, dict]:
     }
 
     note = ""
-    if provider("ICP_PROVIDER") == "dronahq":
+    drona_url, _ = get_config("ICP")
+    use_drona = provider("ICP_PROVIDER") == "dronahq" or (drona_url and provider("ICP_PROVIDER") != "local")
+    if use_drona:
         try:
-            out = IcpOut.model_validate(call_dronahq("ICP", payload))
+            out = run_icp(c, p)
             return out, empty_meta("dronahq")
         except Exception as e:  # any failure falls back, the demo must not stall
             note = f"DronaHQ failed ({type(e).__name__}), used the local agent"
+            log.warning("[ICP] %s: %s", p.id, note)
 
     model, tier = model_for(db, "ICP fitment scoring")
     user = (
