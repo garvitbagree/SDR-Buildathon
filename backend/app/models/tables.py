@@ -37,6 +37,7 @@ class Campaign(Base):
     active_prompt_version: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[str] = mapped_column(String)
     updated_at: Mapped[str] = mapped_column(String)
+    pipeline_config: Mapped[dict] = mapped_column(JSON, default=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -64,6 +65,7 @@ class Campaign(Base):
             "qualifyThreshold": self.qualify_threshold,
             "confidenceThreshold": self.confidence_threshold,
             "escalateOn": self.escalate_on,
+            "pipelineConfig": self.pipeline_config,
         }
 
 
@@ -86,6 +88,7 @@ class ActivityEvent(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     campaign_id: Mapped[str] = mapped_column(String, index=True)
+    prospect_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     agent_key: Mapped[str] = mapped_column(String)
     action: Mapped[str] = mapped_column(Text)
     channel: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -195,3 +198,81 @@ class ConflictResolution(Base):
     time: Mapped[str] = mapped_column(String)
     prev_campaign_ids: Mapped[list] = mapped_column(JSON, default=list)
     added_suppression_id: Mapped[str | None] = mapped_column(String, nullable=True)
+
+class CampaignProspect(Base):
+    __tablename__ = "campaign_prospects"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    campaign_id: Mapped[str] = mapped_column(String, index=True)
+    name: Mapped[str] = mapped_column(String)
+    title: Mapped[str] = mapped_column(String, default="")
+    company: Mapped[str] = mapped_column(String, default="")
+    domain: Mapped[str] = mapped_column(String, default="")
+    email: Mapped[str] = mapped_column(String, default="")
+    linkedin_url: Mapped[str] = mapped_column(String, default="")
+    location: Mapped[str] = mapped_column(String, default="")
+    industry: Mapped[str] = mapped_column(String, default="")
+    company_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source: Mapped[str] = mapped_column(String, default="")
+    facts: Mapped[list] = mapped_column(JSON, default=list)
+    state: Mapped[str] = mapped_column(String, default="DISCOVERED", index=True)
+    score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    icp: Mapped[dict] = mapped_column(JSON, default=dict)
+    research: Mapped[dict] = mapped_column(JSON, default=dict)
+    strategy: Mapped[dict] = mapped_column(JSON, default=dict)
+    message: Mapped[dict] = mapped_column(JSON, default=dict)
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+    def to_dict(self, full: bool = False) -> dict:
+        d = {
+            "id": self.id,
+            "campaignId": self.campaign_id,
+            "name": self.name,
+            "title": self.title,
+            "company": self.company,
+            "domain": self.domain,
+            "email": self.email,
+            "location": self.location,
+            "industry": self.industry,
+            "companySize": self.company_size,
+            "source": self.source,
+            "state": self.state,
+            "score": self.score,
+            "error": self.error,
+            "updatedAt": self.updated_at.isoformat(),
+        }
+        if full:
+            d.update(
+                facts=self.facts, icp=self.icp, research=self.research,
+                strategy=self.strategy, message=self.message,
+            )
+        return d
+
+
+class AgentJob(Base):
+    __tablename__ = "agent_jobs"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    campaign_id: Mapped[str] = mapped_column(String, index=True)
+    prospect_id: Mapped[str] = mapped_column(String, index=True)
+    agent: Mapped[str] = mapped_column(String)
+    status: Mapped[str] = mapped_column(String, default="queued", index=True)  # queued|running|done|dead
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=3)
+    run_after: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class KnowledgeDoc(Base):
+    __tablename__ = "knowledge_docs"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    kb: Mapped[str] = mapped_column(String)
+    title: Mapped[str] = mapped_column(String)
+    content: Mapped[str] = mapped_column(Text)
+    audience: Mapped[list] = mapped_column(JSON, default=list)  # ["*"] or campaign ids

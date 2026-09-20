@@ -69,5 +69,8 @@ def decide(db: Session, event_id: str, decision: str) -> dict:
     if e.status != "pending_approval":
         raise ServiceError("This event is not waiting for approval", 409)
     e.status = decision
+    from app.services import pipeline  # local import avoids a circular import
+
+    pipeline.on_review_decision(db, e, decision)
     db.commit()
     return event_dict(e)
