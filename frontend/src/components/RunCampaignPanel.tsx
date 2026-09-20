@@ -52,6 +52,7 @@ export default function RunCampaignPanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   const [target, setTarget] = useState("5");
   const [industries, setIndustries] = useState("");
@@ -63,8 +64,10 @@ export default function RunCampaignPanel() {
     if (!id) return;
     try {
       setData(await api<Pipeline>(`/campaigns/${id}/pipeline`));
-    } catch {
+      setLoadError("");
+    } catch (e) {
       // keep the last numbers, the next refresh will try again
+      setLoadError(e instanceof ApiError ? e.message : "Something went wrong");
     }
   }, [id]);
 
@@ -128,7 +131,13 @@ export default function RunCampaignPanel() {
     }
   };
 
-  if (!data) return null;
+  if (!data) {
+    return (
+      <div className="rounded-xl border bg-card p-5 text-sm text-muted-foreground">
+        {loadError ? `Could not load the agent run: ${loadError}` : "Loading agent run..."}
+      </div>
+    );
+  }
   const hasRun = data.discovered > 0;
 
   return (
