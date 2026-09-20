@@ -51,7 +51,7 @@ export default function AppLayout() {
           {!collapsed && (
             <>
               <div className="min-w-0 flex-1 leading-tight">
-                <div className="truncate text-sm font-semibold">Autonomous SDR</div>
+                <div className="truncate text-sm font-semibold">Reachwell</div>
                 <div className="text-xs text-muted-foreground">Control plane</div>
               </div>
               <button

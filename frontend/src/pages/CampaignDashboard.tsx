@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import RunCampaignPanel from "@/components/RunCampaignPanel";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -503,7 +504,7 @@ export default function CampaignDashboard() {
           </div>
         </div>
       </div>
-
+      <RunCampaignPanel />
       {banner && (
         <div className={`flex items-start gap-2 rounded-lg border px-4 py-3 text-sm ${banner.cls}`}>
           <Info className="mt-0.5 h-4 w-4 shrink-0" />
