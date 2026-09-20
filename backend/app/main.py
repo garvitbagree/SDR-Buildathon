@@ -38,7 +38,7 @@ async def lifespan(_: FastAPI):
     pipeline_service.worker.stop()
 
 
-app = FastAPI(title="Autonomous SDR API", lifespan=lifespan)
+app = FastAPI(title="Reachwell API", lifespan=lifespan)
 
 origins = [o.strip() for o in os.getenv("FRONTEND_ORIGIN", "http://localhost:5173").split(",") if o.strip()]
 

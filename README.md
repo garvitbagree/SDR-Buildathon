@@ -1,4 +1,4 @@
-# Autonomous SDR: Inter Guild Buildathon
+# Reachwell: Inter Guild Buildathon
 
 Multi-channel autonomous SDR system: a campaign control plane (React + FastAPI)
 plus an agentic outreach engine built on DronaHQ.
