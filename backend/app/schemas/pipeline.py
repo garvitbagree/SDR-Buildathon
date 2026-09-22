@@ -12,3 +12,7 @@ class StartIn(CamelModel):
     pain_points: list[str] = []
     company_size_min: int = Field(0, ge=0)
     company_size_max: int = Field(100000, ge=1)
+
+
+class TargetIn(CamelModel):
+    target_count: int = Field(ge=1, le=500)

@@ -128,10 +128,46 @@ def test_simulate_reply_prospect_from_other_campaign_rejected():
             assert e.status == 404
 
 
+def test_simulate_replies_batch_stops_when_prospects_run_out():
+    _setup()
+    with SessionLocal() as db:
+        c = _campaign(db)
+        _prospect(db, c, pid="p1")
+        _prospect(db, c, pid="p2")
+        _prospect(db, c, pid="p3")
+        db.commit()
+
+        c = db.get(Campaign, "c1")
+        result = replies.simulate_replies(db, c, count=10)  # only 3 prospects exist
+
+        assert result["requested"] == 10
+        assert result["simulated"] == 3
+        assert len(result["replies"]) == 3
+        prospect_ids = {r["prospectId"] for r in result["replies"]}
+        assert prospect_ids == {"p1", "p2", "p3"}  # each replied at most once, no duplicates
+
+
+def test_simulate_replies_batch_within_limit():
+    _setup()
+    with SessionLocal() as db:
+        c = _campaign(db)
+        for i in range(5):
+            _prospect(db, c, pid=f"p{i}")
+        db.commit()
+
+        c = db.get(Campaign, "c1")
+        result = replies.simulate_replies(db, c, count=3)
+
+        assert result["requested"] == 3
+        assert result["simulated"] == 3
+
+
 if __name__ == "__main__":
     test_simulate_reply_random_prospect_and_intent()
     test_simulate_reply_explicit_prospect_and_intent()
     test_simulate_reply_unknown_intent_rejected()
     test_simulate_reply_no_eligible_prospect()
     test_simulate_reply_prospect_from_other_campaign_rejected()
+    test_simulate_replies_batch_stops_when_prospects_run_out()
+    test_simulate_replies_batch_within_limit()
     print("simulate_reply tests OK")

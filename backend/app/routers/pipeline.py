@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models.tables import CampaignProspect
-from app.schemas.pipeline import StartIn
+from app.schemas.pipeline import StartIn, TargetIn
 from app.services import pipeline
 from app.services.campaign_service import ServiceError, get_or_404
 
@@ -17,6 +17,12 @@ router = APIRouter(tags=["pipeline"])
 def start(campaign_id: str, body: StartIn, db: Session = Depends(get_db)):
     c = get_or_404(db, campaign_id)
     return pipeline.start(db, c, body.model_dump(by_alias=True))
+
+
+@router.post("/campaigns/{campaign_id}/target")
+def adjust_target(campaign_id: str, body: TargetIn, db: Session = Depends(get_db)):
+    c = get_or_404(db, campaign_id)
+    return pipeline.adjust_target(db, c, body.target_count)
 
 
 @router.get("/campaigns/{campaign_id}/pipeline")

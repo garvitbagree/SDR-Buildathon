@@ -135,6 +135,21 @@ def simulate_reply(db: Session, c: Campaign, prospect_id: str | None = None, int
             "channel": channel, "text": text}
 
 
+def simulate_replies(db: Session, c: Campaign, count: int) -> dict:
+    """Fires up to `count` simulated replies, each a random prospect and random intent, same as
+    simulate_reply(). Stops early (without erroring) once no more prospects are eligible, since
+    running out of prospects to reply for isn't a failure, just the end of what's simulate-able."""
+    sent = []
+    for _ in range(count):
+        try:
+            sent.append(simulate_reply(db, c))
+        except ServiceError as e:
+            if e.status == 409:  # no eligible prospects left, stop quietly
+                break
+            raise
+    return {"requested": count, "simulated": len(sent), "replies": sent}
+
+
 def _claim(db: Session, prospect_id: str) -> ProspectMessage | None:
     rows = db.scalars(
         select(ProspectMessage).where(

@@ -19,3 +19,7 @@ class CallTurnIn(CamelModel):
 class SimulateReplyIn(CamelModel):
     prospect_id: str | None = None
     intent: str | None = None
+
+
+class SimulateRepliesIn(CamelModel):
+    count: int = Field(ge=1, le=50, default=5)

@@ -321,6 +321,34 @@ def start(db: Session, c: Campaign, cfg: dict) -> dict:
     return {"campaignId": c.id, "status": c.status, "targetCount": cfg["targetCount"], "candidates": added}
 
 
+def adjust_target(db: Session, c: Campaign, target_count: int) -> dict:
+    """Raises or lowers the qualified-prospect target on an already-started campaign.
+
+    Lowering it is purely cosmetic - it changes the goal shown on the dashboard, prospects
+    already qualified stay qualified. Raising it is the interesting case: maybe_discover_more()
+    already re-reads targetCount fresh on every check, so updating the config is most of the
+    work. What's missing on its own is a trigger - if the run had already gone idle (target
+    reached, no jobs in flight), nothing will call maybe_discover_more() again until something
+    else happens. So this calls it directly, once, right after the config is saved.
+    """
+    if c.status != "live":
+        raise ServiceError(f"A {c.status} campaign's target cannot be changed while it isn't live", 409)
+    if not db.scalar(select(func.count()).select_from(CampaignProspect).where(CampaignProspect.campaign_id == c.id)):
+        raise ServiceError("This campaign has not started a run yet. Use start instead.", 409)
+
+    cfg = dict(c.pipeline_config or {})
+    previous = cfg.get("targetCount", 0)
+    cfg["targetCount"] = target_count
+    c.pipeline_config = cfg
+    db.commit()
+
+    maybe_discover_more(db, c)
+    return {
+        "campaignId": c.id, "previousTarget": previous, "targetCount": target_count,
+        "qualified": qualified_count(db, c.id),
+    }
+
+
 def retry(db: Session, prospect_id: str) -> CampaignProspect:
     p = db.get(CampaignProspect, prospect_id)
     if p is None:
