@@ -449,6 +449,7 @@ class Worker:
         self.concurrency = int(os.getenv("AGENT_CONCURRENCY", "4"))
         self.pool = ThreadPoolExecutor(max_workers=self.concurrency)
         self.inflight: set[str] = set()
+        self.inflight_campaign: dict[str, str] = {}  # job id -> campaign id, for the per-campaign cap below
         self.lock = threading.Lock()
         self.stop_flag = threading.Event()
 
@@ -476,12 +477,15 @@ class Worker:
     def _done(self, job_id: str) -> None:
         with self.lock:
             self.inflight.discard(job_id)
+            self.inflight_campaign.pop(job_id, None)
 
     def _tick(self) -> None:
         with self.lock:
             free = self.concurrency - len(self.inflight)
             inflight = set(self.inflight)
+            counts_by_campaign = Counter(self.inflight_campaign.values())
         ids: list[str] = []
+        picked_campaigns: list[str] = []
         with SessionLocal() as db:
             if get_kill_switch(db):
                 return
@@ -497,20 +501,32 @@ class Worker:
                         select(AgentJob).where(AgentJob.campaign_id == cid, AgentJob.status == "queued", AgentJob.run_after <= now)
                         .order_by(prio, AgentJob.created_at).limit(free)
                     ))
+                # One campaign can't take every slot when others also have work waiting - each
+                # campaign with jobs ready this tick is capped at an even share of total
+                # concurrency (rounded up, so a single campaign still gets everything when it's
+                # the only one with anything to do).
+                active = sum(1 for jobs in per.values() if jobs)
+                cap = max(1, math.ceil(self.concurrency / active)) if active else self.concurrency
                 picked: list[AgentJob] = []
                 while len(picked) < free and any(per.values()):  # round-robin so campaigns share capacity
                     for cid in list(per):
-                        if per[cid] and len(picked) < free:
-                            picked.append(per[cid].pop(0))
+                        if not per[cid] or len(picked) >= free:
+                            continue
+                        already = counts_by_campaign.get(cid, 0) + sum(1 for pc in picked_campaigns if pc == cid)
+                        if already >= cap:
+                            continue  # this campaign is at its share for this tick, let others go first
+                        picked.append(per[cid].pop(0))
+                        picked_campaigns.append(cid)
                 for j in picked:
                     j.status = "running"
                     j.started_at = now
                     j.attempts += 1
                     ids.append(j.id)
             db.commit()
-        for jid in ids:
+        for jid, cid in zip(ids, picked_campaigns):
             with self.lock:
                 self.inflight.add(jid)
+                self.inflight_campaign[jid] = cid
             self.pool.submit(run_job, jid).add_done_callback(lambda _f, jid=jid: self._done(jid))
 
 

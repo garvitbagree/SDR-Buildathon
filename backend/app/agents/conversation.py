@@ -2,7 +2,7 @@ import json
 
 from sqlalchemy.orm import Session
 
-from app.agents.base import build_system
+from app.agents.base import build_system, empty_meta
 from app.agents.personalisation import _flags
 from app.agents.schemas import ConversationOut
 from app.llm import generate_json, model_for
@@ -18,6 +18,18 @@ TOPICS = "pricing, contract, security, legal, compliance, integration, competito
 
 
 def run(db: Session, c: Campaign, p: CampaignProspect, history: list[dict], latest: str) -> tuple[dict, dict]:
+    if not latest.strip():
+        # Defense-in-depth: receive_reply() already rejects an empty body before it reaches the
+        # DB, so this shouldn't happen through the normal paths - but if some future inbound
+        # source ever bypasses that check, this avoids spending a Groq call classifying nothing.
+        result = ConversationOut(
+            intent="unclear", sentiment="neutral", summary="The inbound message had no readable text.",
+            topics=[], response_required=False, reply_draft="", requires_human_review=True, confidence=0.0,
+        ).model_dump()
+        result["flags"] = []
+        result["knowledge_docs"] = []
+        return result, empty_meta("empty_body_precheck", note="Skipped - inbound message had no text")
+
     cfg = c.pipeline_config or {}
     docs = retrieve(db, c.id, f"{latest} {cfg.get('objective', '')} objection pricing security", k=3)
     payload = {

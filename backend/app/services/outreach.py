@@ -1,9 +1,7 @@
 """Sending. Agents write messages, this module delivers them, and only after the guard allows it."""
 import os
-import smtplib
-import ssl
-from email.message import EmailMessage
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -46,29 +44,38 @@ def _reply_to_for(prospect_id: str) -> str:
     return f"{local}+{prospect_id}@{domain}"
 
 
-def smtp_send(to: str, subject: str, body: str, reply_to: str = "") -> tuple[str, str]:
-    host, user, password = os.getenv("SMTP_HOST", ""), os.getenv("SMTP_USER", ""), os.getenv("SMTP_PASS", "")
-    if not (host and user and password):
-        return "unavailable", "SMTP is not configured (SMTP_HOST, SMTP_USER, SMTP_PASS)"
-    port = int(os.getenv("SMTP_PORT", "587"))
-    msg = EmailMessage()
-    msg["Subject"] = subject or "(no subject)"
-    msg["From"] = os.getenv("SMTP_FROM", "") or user
-    msg["To"] = to
-    msg["Reply-To"] = reply_to or to
-    msg.set_content(body)
+def resend_send(to: str, subject: str, body: str, reply_to: str = "", prospect_id: str = "") -> tuple[str, str]:
+    """Sends via the Resend HTTP API (port 443) instead of raw SMTP, since Render blocks outbound
+    SMTP ports (25/465/587) on its free tier. Without a verified domain, Resend's free sandbox
+    (onboarding@resend.dev) can only deliver to the exact address the account was registered
+    with - not even a +tag of it - so the actual recipient is forced to GMAIL_ADDRESS (the same
+    burner inbox address the account should be registered under), regardless of what address was
+    passed in. Reply-To has no such restriction, so prospect matching on replies is unaffected."""
+    api_key = os.getenv("RESEND_API_KEY", "").strip()
+    if not api_key:
+        return "unavailable", "Resend is not configured (RESEND_API_KEY)"
+    sender = os.getenv("RESEND_FROM", "onboarding@resend.dev").strip()
+    sandbox_to = os.getenv("GMAIL_ADDRESS", "").strip()
+    actual_to = sandbox_to or to
+    payload: dict = {"from": sender, "to": [actual_to], "subject": subject or "(no subject)", "text": body}
+    if reply_to:
+        payload["reply_to"] = reply_to
+    if prospect_id:
+        payload["headers"] = {"X-Prospect-Id": prospect_id}
     try:
-        if port == 465:
-            with smtplib.SMTP_SSL(host, port, timeout=20, context=ssl.create_default_context()) as s:
-                s.login(user, password)
-                s.send_message(msg)
-        else:
-            with smtplib.SMTP(host, port, timeout=20) as s:
-                s.starttls(context=ssl.create_default_context())
-                s.login(user, password)
-                s.send_message(msg)
+        r = httpx.post(
+            "https://api.resend.com/emails", json=payload,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            timeout=20,
+        )
+        if r.status_code >= 400:
+            try:
+                detail = r.json().get("message", r.text[:200])
+            except Exception:
+                detail = r.text[:200]
+            return "failed", f"Resend {r.status_code}: {detail}"
         return "sent", ""
-    except Exception as e:  # never let a mail server problem crash a worker
+    except Exception as e:  # never let an email provider problem crash a worker
         return "failed", f"{type(e).__name__}"
 
 
@@ -93,7 +100,7 @@ def deliver(db: Session, c: Campaign, p: CampaignProspect, *, channel: str, subj
             status, note = "unavailable", "This prospect has no email address"
         elif force_live or channel_mode("email") == "live":
             if recipient_allowed(p.email):
-                status, note = smtp_send(p.email, subject, body, reply_to=_reply_to_for(p.id))
+                status, note = resend_send(p.email, subject, body, reply_to=_reply_to_for(p.id), prospect_id=p.id)
             else:
                 status, note = "blocked", "Recipient is not in DEMO_INBOXES"
     elif channel_mode(channel) == "live":

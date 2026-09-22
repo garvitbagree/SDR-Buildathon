@@ -84,14 +84,14 @@ def test_send_real_rejects_prospect_not_ready():
         os.environ.update(saved_env)
 
 
-def test_send_real_attempts_smtp_without_flipping_global_sandbox():
-    """SMTP isn't actually configured in the test environment, so this should come back as
+def test_send_real_attempts_resend_without_flipping_global_sandbox():
+    """Resend isn't actually configured in the test environment, so this should come back as
     'unavailable' rather than 'sent' - but the important assertion is that it TRIED (force_live
     took effect), and that CHANNEL_MODE_EMAIL was never read or required."""
     _setup()
     saved_env = dict(os.environ)
     os.environ["DEMO_INBOXES"] = "buildathon.product@gmail.com"
-    for key in ("SMTP_HOST", "SMTP_USER", "SMTP_PASS", "CHANNEL_MODE_EMAIL"):
+    for key in ("RESEND_API_KEY", "CHANNEL_MODE_EMAIL"):
         os.environ.pop(key, None)
     try:
         with SessionLocal() as db:
@@ -102,9 +102,9 @@ def test_send_real_attempts_smtp_without_flipping_global_sandbox():
             p = db.get(CampaignProspect, "p1")
             result = outreach.send_real(db, c, p)
             # not "sandbox" - proves force_live bypassed the (unset) global switch and actually
-            # attempted a real send path, which then correctly reports SMTP as unconfigured
+            # attempted a real send path, which then correctly reports Resend as unconfigured
             assert result["status"] == "unavailable"
-            assert "SMTP" in result["reason"]
+            assert "Resend" in result["reason"]
     finally:
         os.environ.clear()
         os.environ.update(saved_env)
@@ -113,5 +113,5 @@ def test_send_real_attempts_smtp_without_flipping_global_sandbox():
 if __name__ == "__main__":
     test_send_real_rejects_prospect_not_in_demo_inboxes()
     test_send_real_rejects_prospect_not_ready()
-    test_send_real_attempts_smtp_without_flipping_global_sandbox()
+    test_send_real_attempts_resend_without_flipping_global_sandbox()
     print("send_real tests OK")
