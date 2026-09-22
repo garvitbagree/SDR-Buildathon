@@ -329,9 +329,12 @@ export default function ProspectsPanel({ campaignId }: { campaignId: string }) {
             </TableBody>
           </Table>
           {filtered.length > shown.length && (
-            <div className="flex justify-center border-t py-3">
+            <div className="flex justify-center gap-2 border-t py-3">
               <Button variant="outline" size="sm" onClick={() => setVisible((v) => v + PAGE_SIZE)}>
                 Load {Math.min(PAGE_SIZE, filtered.length - shown.length)} more ({shown.length} of {filtered.length})
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setVisible(filtered.length)}>
+                Load all
               </Button>
             </div>
           )}
