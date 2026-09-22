@@ -352,7 +352,12 @@ def _on_review(db: Session, ev: ActivityEvent, decision: str) -> None:
         if decision == "approved":
             p = db.get(CampaignProspect, m.prospect_id)
             c = db.get(Campaign, m.campaign_id)
-            outreach.send_existing(db, c, p, m)
+            # If this prospect was deliberately pointed at the burner inbox for the real-email
+            # demo, an approved follow-up should go out for real too - the same as the first
+            # touch did via send-real. Every other prospect's approved drafts stay exactly as
+            # sandboxed as before; this can only ever turn ON a real send, never turn one off.
+            force_live = m.channel == "email" and outreach.recipient_allowed(p.email or "")
+            outreach.send_existing(db, c, p, m, force_live=force_live)
         else:
             m.status = "rejected"
         return

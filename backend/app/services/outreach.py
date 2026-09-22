@@ -150,9 +150,10 @@ def send_first_touch(db: Session, c: Campaign, p: CampaignProspect) -> dict:
     return result
 
 
-def send_existing(db: Session, c: Campaign, p: CampaignProspect, m: ProspectMessage) -> dict:
+def send_existing(db: Session, c: Campaign, p: CampaignProspect, m: ProspectMessage, force_live: bool = False) -> dict:
     """Sends a stored draft, for example a reply or follow-up that a manager just approved."""
-    result = deliver(db, c, p, channel=m.channel, subject=m.subject, body=m.body, kind=m.kind, existing=m)
+    result = deliver(db, c, p, channel=m.channel, subject=m.subject, body=m.body, kind=m.kind,
+                      existing=m, force_live=force_live)
     db.flush()  # autoflush is off, so write the new state before counting
     pipeline.recompute_funnel(db, c)
     return result
