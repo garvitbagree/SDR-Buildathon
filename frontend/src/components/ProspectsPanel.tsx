@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Loader2, Mail, RefreshCw, X } from "lucide-react";
+import { Contact, Loader2, Mail, MessageSquareText, Phone, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -40,6 +40,24 @@ const STATE_STYLES: Record<string, string> = {
 };
 const stateStyle = (s: string) => STATE_STYLES[s] ?? "border-stone-200 bg-stone-50 text-stone-600";
 const stateLabel = (s: string) => s.replace(/_/g, " ").toLowerCase();
+
+const CHANNEL_ICON: Record<string, ReactNode> = {
+  email: <Mail className="h-3.5 w-3.5" />,
+  linkedin: <Contact className="h-3.5 w-3.5" />,
+  sms: <MessageSquareText className="h-3.5 w-3.5" />,
+  voice: <Phone className="h-3.5 w-3.5" />,
+};
+const CHANNEL_LABEL: Record<string, string> = { email: "Email", linkedin: "LinkedIn", sms: "SMS", voice: "Voice" };
+
+function ChannelBadge({ channel }: { channel: string | null }) {
+  if (!channel) return <span className="text-xs text-muted-foreground">—</span>;
+  return (
+    <span className="inline-flex items-center gap-1.5 text-sm">
+      {CHANNEL_ICON[channel] ?? null}
+      {CHANNEL_LABEL[channel] ?? channel}
+    </span>
+  );
+}
 
 function GmailBadge({ email }: { email: string }) {
   const [configuredAddress, setConfiguredAddress] = useState<string | null>(null);
@@ -310,6 +328,7 @@ export default function ProspectsPanel({ campaignId }: { campaignId: string }) {
                 <TableHead className="pl-5">Name</TableHead>
                 <TableHead>Title</TableHead>
                 <TableHead>Company</TableHead>
+                <TableHead>Channel</TableHead>
                 <TableHead>State</TableHead>
                 <TableHead className="pr-5">Score</TableHead>
               </TableRow>
@@ -320,6 +339,9 @@ export default function ProspectsPanel({ campaignId }: { campaignId: string }) {
                   <TableCell className="pl-5 font-medium">{p.name}</TableCell>
                   <TableCell>{p.title || "—"}</TableCell>
                   <TableCell>{p.company || "—"}</TableCell>
+                  <TableCell>
+                    <ChannelBadge channel={p.channel} />
+                  </TableCell>
                   <TableCell>
                     <Pill cls={stateStyle(p.state)}>{stateLabel(p.state)}</Pill>
                   </TableCell>

@@ -243,6 +243,9 @@ class CampaignProspect(Base):
             "score": self.score,
             "error": self.error,
             "updatedAt": self.updated_at.isoformat(),
+            # cheap enough to always include - lets a prospect list show the channel without a
+            # separate full-detail fetch per row
+            "channel": (self.message or {}).get("channel") or (self.strategy or {}).get("primary_channel"),
         }
         if full:
             d.update(

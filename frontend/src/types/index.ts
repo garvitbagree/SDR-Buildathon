@@ -182,6 +182,7 @@ export interface Prospect {
   score: number | null;
   error: string;
   updatedAt: string;
+  channel: Channel | null;
   facts?: string[];
   icp?: ProspectIcp;
   research?: Record<string, unknown>;
