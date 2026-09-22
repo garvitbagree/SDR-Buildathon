@@ -94,6 +94,19 @@ def get_stats(db: Session, campaign_id: str) -> dict:
     }
 
 
+def get_latest_pending_event_for_prospect(db: Session, prospect_id: str) -> ActivityEvent | None:
+    """Resolves a prospect id to the one event decide() can actually act on. Only
+    status == "pending_approval" events are approvable - an "escalated" event has no draft
+    attached and decide() rejects it outright, so this deliberately excludes those rather than
+    handing the caller an id that will just 409 a moment later."""
+    return db.scalar(
+        select(ActivityEvent)
+        .where(ActivityEvent.prospect_id == prospect_id, ActivityEvent.status == "pending_approval")
+        .order_by(ActivityEvent.created_at.desc())
+        .limit(1)
+    )
+
+
 def decide(db: Session, event_id: str, decision: str) -> dict:
     e = db.get(ActivityEvent, event_id)
     if e is None:

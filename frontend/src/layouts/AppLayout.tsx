@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { useControl } from "@/context/ControlContext";
 import { useConflicts } from "@/context/ConflictContext";
 import { Settings } from "lucide-react";
+import ChatWindow from "@/components/Chatbot/ChatWindow";
 
 const nav = [
   { to: "/campaigns", label: "Campaigns", icon: LayoutDashboard },
@@ -174,6 +175,8 @@ export default function AppLayout() {
           </div>
         </main>
       </div>
+
+      <ChatWindow />
     </div>
   );
 }

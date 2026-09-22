@@ -11,6 +11,7 @@ load_dotenv()
 
 from app.db import Base, SessionLocal, engine  # noqa: E402
 from app.models import tables  # noqa: E402,F401  (registers the tables)
+from app.chatbot import router as chatbot_router  # noqa: E402
 from app.routers import activity, campaigns, conflicts, control, conversations, inbox, pipeline, prompts, reps, settings  # noqa: E402
 from app.seed import seed  # noqa: E402
 from app.seed_agents import seed_agents  # noqa: E402
@@ -70,6 +71,7 @@ app.include_router(settings.router)
 app.include_router(pipeline.router)
 app.include_router(conversations.router)
 app.include_router(inbox.router)
+app.include_router(chatbot_router.router)
 
 
 @app.get("/health")
