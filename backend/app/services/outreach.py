@@ -34,7 +34,19 @@ def recipient_allowed(addr: str) -> bool:
     return f"{local.split('+')[0]}@{domain}" in inboxes
 
 
-def smtp_send(to: str, subject: str, body: str) -> tuple[str, str]:
+def _reply_to_for(prospect_id: str) -> str:
+    """Always routes replies back to the polled burner inbox, tagged with the real prospect id -
+    regardless of which real address the message was actually delivered to. This is what lets a
+    prospect's outbound go to any real inbox (not just the burner one) while replies still land
+    where the poller is watching."""
+    gmail = os.getenv("GMAIL_ADDRESS", "").strip()
+    if not gmail or "@" not in gmail:
+        return ""
+    local, domain = gmail.split("@", 1)
+    return f"{local}+{prospect_id}@{domain}"
+
+
+def smtp_send(to: str, subject: str, body: str, reply_to: str = "") -> tuple[str, str]:
     host, user, password = os.getenv("SMTP_HOST", ""), os.getenv("SMTP_USER", ""), os.getenv("SMTP_PASS", "")
     if not (host and user and password):
         return "unavailable", "SMTP is not configured (SMTP_HOST, SMTP_USER, SMTP_PASS)"
@@ -43,6 +55,7 @@ def smtp_send(to: str, subject: str, body: str) -> tuple[str, str]:
     msg["Subject"] = subject or "(no subject)"
     msg["From"] = os.getenv("SMTP_FROM", "") or user
     msg["To"] = to
+    msg["Reply-To"] = reply_to or to
     msg.set_content(body)
     try:
         if port == 465:
@@ -60,7 +73,11 @@ def smtp_send(to: str, subject: str, body: str) -> tuple[str, str]:
 
 
 def deliver(db: Session, c: Campaign, p: CampaignProspect, *, channel: str, subject: str, body: str,
-            kind: str, existing: ProspectMessage | None = None) -> dict:
+            kind: str, existing: ProspectMessage | None = None, force_live: bool = False) -> dict:
+    """force_live sends this one call for real regardless of CHANNEL_MODE_EMAIL, so a single
+    demonstration send doesn't require flipping the global sandbox switch (and therefore can't
+    affect every other prospect in flight). recipient_allowed() is still enforced either way -
+    this can never send to an address outside DEMO_INBOXES, forced or not."""
     agent = AGENT[kind]
     d = can_act(db, c.id, agent, channel, p.email or None)
     if not d.allowed:
@@ -74,9 +91,9 @@ def deliver(db: Session, c: Campaign, p: CampaignProspect, *, channel: str, subj
     if channel == "email":
         if not p.email:
             status, note = "unavailable", "This prospect has no email address"
-        elif channel_mode("email") == "live":
+        elif force_live or channel_mode("email") == "live":
             if recipient_allowed(p.email):
-                status, note = smtp_send(p.email, subject, body)
+                status, note = smtp_send(p.email, subject, body, reply_to=_reply_to_for(p.id))
             else:
                 status, note = "blocked", "Recipient is not in DEMO_INBOXES"
     elif channel_mode(channel) == "live":
@@ -131,6 +148,28 @@ def send_existing(db: Session, c: Campaign, p: CampaignProspect, m: ProspectMess
     result = deliver(db, c, p, channel=m.channel, subject=m.subject, body=m.body, kind=m.kind, existing=m)
     db.flush()  # autoflush is off, so write the new state before counting
     pipeline.recompute_funnel(db, c)
+    return result
+
+
+def send_real(db: Session, c: Campaign, p: CampaignProspect) -> dict:
+    """Sends this ONE prospect's ready message for real - the deliberate, selective demo action,
+    separate from CHANNEL_MODE_EMAIL and from send_first_touch()/send_ready(), which stay
+    sandboxed for everything else regardless of this call."""
+    if p.state != "READY_TO_SEND":
+        raise ServiceError(f"This prospect is {p.state}, not ready to send", 409)
+    if not p.email or not recipient_allowed(p.email):
+        raise ServiceError(
+            "This prospect's email is not in DEMO_INBOXES. Point it at the burner inbox first.", 422
+        )
+    m = p.message or {}
+    channel = _channel_for(p, m.get("channel") or (p.strategy or {}).get("primary_channel") or "email")
+    if channel != "email":
+        raise ServiceError("Real sending is only wired up for email right now", 422)
+    result = deliver(db, c, p, channel="email", subject=m.get("subject", ""), body=m.get("body", ""),
+                      kind="first_touch", force_live=True)
+    db.flush()  # autoflush is off, so write the new state before counting
+    pipeline.recompute_funnel(db, c)
+    db.commit()
     return result
 
 

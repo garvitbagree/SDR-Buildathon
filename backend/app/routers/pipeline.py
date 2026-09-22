@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models.tables import CampaignProspect
-from app.schemas.pipeline import StartIn, TargetIn
+from app.schemas.pipeline import ProspectUpdateIn, StartIn, TargetIn
 from app.services import pipeline
 from app.services.campaign_service import ServiceError, get_or_404
 
@@ -45,6 +45,12 @@ def prospect(prospect_id: str, db: Session = Depends(get_db)):
     p = db.get(CampaignProspect, prospect_id)
     if p is None:
         raise ServiceError("Prospect not found", 404)
+    return p.to_dict(full=True)
+
+
+@router.patch("/prospects/{prospect_id}")
+def update_prospect(prospect_id: str, body: ProspectUpdateIn, db: Session = Depends(get_db)):
+    p = pipeline.update_prospect(db, prospect_id, body.model_dump(exclude_unset=True))
     return p.to_dict(full=True)
 
 

@@ -16,3 +16,12 @@ class StartIn(CamelModel):
 
 class TargetIn(CamelModel):
     target_count: int = Field(ge=1, le=500)
+
+
+class ProspectUpdateIn(CamelModel):
+    name: str | None = None
+    title: str | None = None
+    company: str | None = None
+    email: str | None = None
+    location: str | None = None
+    industry: str | None = None

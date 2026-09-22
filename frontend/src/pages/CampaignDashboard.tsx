@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import RunCampaignPanel from "@/components/RunCampaignPanel";
+import ProspectsPanel from "@/components/ProspectsPanel";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -565,6 +566,8 @@ export default function CampaignDashboard() {
           tone="bg-violet-100"
         />
       </div>
+
+      <ProspectsPanel campaignId={c.id} />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <Panel title="Prospect funnel" subtitle="Percentage is conversion from the previous stage">

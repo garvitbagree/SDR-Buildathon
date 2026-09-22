@@ -16,6 +16,12 @@ def send_one(prospect_id: str, db: Session = Depends(get_db)):
     return outreach.send_first_touch(db, get_or_404(db, p.campaign_id), p)
 
 
+@router.post("/prospects/{prospect_id}/send-real")
+def send_real(prospect_id: str, db: Session = Depends(get_db)):
+    p = replies.get_prospect(db, prospect_id)
+    return outreach.send_real(db, get_or_404(db, p.campaign_id), p)
+
+
 @router.post("/campaigns/{campaign_id}/send-ready")
 def send_ready(campaign_id: str, limit: int = 50, db: Session = Depends(get_db)):
     return outreach.send_ready(db, get_or_404(db, campaign_id), limit)

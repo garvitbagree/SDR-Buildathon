@@ -144,3 +144,60 @@ export type NewCampaign = Omit<
 >;
 
 export type NewRep = Omit<Rep, "id" | "status">;
+
+export interface ProspectIcp {
+  qualified?: boolean;
+  score?: number;
+  reasons?: string[];
+  pain_points?: string[];
+  missing_information?: string[];
+  requires_human_review?: boolean;
+  final_qualified?: boolean;
+  threshold?: number;
+}
+
+export interface ProspectMessageDraft {
+  channel?: Channel;
+  subject?: string;
+  body?: string;
+  confidence?: number;
+  flags?: string[];
+  requires_human_review?: boolean;
+  review_reasons?: string[];
+}
+
+export interface Prospect {
+  id: string;
+  campaignId: string;
+  name: string;
+  title: string;
+  company: string;
+  domain: string;
+  email: string;
+  location: string;
+  industry: string;
+  companySize: number | null;
+  source: string;
+  state: string;
+  score: number | null;
+  error: string;
+  updatedAt: string;
+  facts?: string[];
+  icp?: ProspectIcp;
+  research?: Record<string, unknown>;
+  strategy?: Record<string, unknown>;
+  message?: ProspectMessageDraft;
+}
+
+export interface ProspectMessageItem {
+  id: string;
+  campaignId: string;
+  prospectId: string;
+  direction: "out" | "in";
+  channel: Channel;
+  kind: string;
+  subject: string;
+  body: string;
+  status: string;
+  meta: Record<string, unknown>;
+}

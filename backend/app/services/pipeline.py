@@ -349,6 +349,20 @@ def adjust_target(db: Session, c: Campaign, target_count: int) -> dict:
     }
 
 
+def update_prospect(db: Session, prospect_id: str, fields: dict) -> CampaignProspect:
+    """Edits a prospect's own fields directly - currently the only real use is pointing a
+    single demo prospect's email at the burner inbox so a real send/reply can be demonstrated,
+    without touching how the other seeded prospects behave."""
+    p = db.get(CampaignProspect, prospect_id)
+    if p is None:
+        raise ServiceError("Prospect not found", 404)
+    for key, value in fields.items():
+        if value is not None:
+            setattr(p, key, value)
+    db.commit()
+    return p
+
+
 def retry(db: Session, prospect_id: str) -> CampaignProspect:
     p = db.get(CampaignProspect, prospect_id)
     if p is None:
