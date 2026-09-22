@@ -156,6 +156,14 @@ function ProspectDrawer({ prospectId, onClose, onChanged }: { prospectId: string
       onChanged();
     });
 
+  const bookMeeting = () =>
+    withBusy(async () => {
+      await api(`/prospects/${prospectId}/meeting`, { method: "POST" });
+      setNotice("Meeting booked.");
+      await load();
+      onChanged();
+    });
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={onClose}>
       <div className="h-full w-full max-w-lg overflow-y-auto bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
@@ -175,6 +183,12 @@ function ProspectDrawer({ prospectId, onClose, onChanged }: { prospectId: string
               {prospect.score !== null && <Pill cls="border-stone-200 bg-stone-50 text-stone-600">score {prospect.score}</Pill>}
               <GmailBadge email={prospect.email} />
             </div>
+
+            {prospect.state === "MEETING_PENDING" && (
+              <Button size="sm" disabled={busy} onClick={bookMeeting}>
+                Mark meeting booked
+              </Button>
+            )}
 
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <div>
