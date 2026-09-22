@@ -30,9 +30,76 @@ GUIDE = (
     "If company size or another key field is missing, list it in missing_information and set requires_human_review=true."
 )
 
+# Title keywords that are almost never the right buyer for a B2B SDR campaign, unless the
+# campaign is itself targeting that function (checked against target_roles below).
+ROLE_EXCLUDE_KEYWORDS = ("recruiter", "human resources", "hr business partner", "hr manager",
+                          "marketing manager", "sales director", "product designer")
+
+# Common short forms so "USA" and "United States" (or "UK" and "United Kingdom") aren't
+# treated as a mismatch. Deliberately small: an unmapped string just falls through unchanged
+# and is compared as-is, so this can only ever make the check less strict, never more.
+GEO_ALIASES = {
+    "usa": "united states", "us": "united states", "u.s.": "united states", "u.s.a.": "united states",
+    "uk": "united kingdom", "u.k.": "united kingdom",
+    "uae": "united arab emirates",
+}
+
+
+def _norm_geo(value: str | None) -> str:
+    v = (value or "").strip().lower()
+    return GEO_ALIASES.get(v, v)
+
+
+def nlp_precheck(c: Campaign, p: CampaignProspect) -> dict | None:
+    """Deterministic, pre-LLM rejection checks that don't need a model call.
+
+    Returns a rejection dict (same shape IcpOut.model_dump() produces) when the prospect can be
+    rejected with certainty, or None when it needs the real scoring agent (DronaHQ or local LLM).
+    Kept intentionally conservative: it only ever rejects, never qualifies, so a false positive
+    here can only make us call the LLM more, not less.
+    """
+    cfg = c.pipeline_config or {}
+    reasons: list[str] = []
+
+    geo_norm, loc_norm = _norm_geo(c.geography), _norm_geo(p.location)
+    if geo_norm and loc_norm and geo_norm not in loc_norm and loc_norm not in geo_norm:
+        reasons.append(f"Geography exclusion: prospect is in {p.location!r}, campaign targets {c.geography!r}")
+
+    if c.exclusions and p.company:
+        excluded = [e.strip().lower() for e in c.exclusions.split(",") if e.strip()]
+        if p.company.strip().lower() in excluded:
+            reasons.append(f"Excluded company: {p.company!r} is on the campaign's exclusion list")
+
+    lo, hi = cfg.get("companySizeMin"), cfg.get("companySizeMax")
+    if p.company_size is not None and (
+        (lo is not None and p.company_size < lo) or (hi is not None and p.company_size > hi)
+    ):
+        reasons.append(f"Company size {p.company_size} is outside the campaign's {lo}-{hi} range")
+
+    if p.title:
+        title_low = p.title.strip().lower()
+        target_low = " ".join(c.target_roles or []).lower()
+        for kw in ROLE_EXCLUDE_KEYWORDS:
+            if kw in title_low and kw not in target_low:
+                reasons.append(f"Role exclusion: {p.title!r} matches excluded function {kw!r}")
+                break
+
+    if not reasons:
+        return None
+
+    return IcpOut(
+        qualified=False, score=0, reasons=reasons, pain_points=[],
+        missing_information=[], requires_human_review=False,
+    ).model_dump()
+
 
 def run(db: Session, c: Campaign, p: CampaignProspect) -> tuple[IcpOut, dict]:
     cfg = c.pipeline_config or {}
+
+    pre = nlp_precheck(c, p)
+    if pre is not None:
+        return IcpOut(**pre), empty_meta("nlp_precheck", note="Rejected by deterministic pre-filter, no LLM call made")
+
     payload = {
         "campaign_icp": {
             "roles": c.target_roles,

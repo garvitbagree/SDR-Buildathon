@@ -2,6 +2,8 @@ const BASE =
   (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "") ??
   "http://localhost:8000";
 
+const DEFAULT_TIMEOUT_MS = 30000;
+
 export class ApiError extends Error {
   status: number;
 
@@ -26,18 +28,28 @@ function detailText(detail: unknown): string {
 
 export async function api<T = unknown>(
   path: string,
-  options: { method?: string; body?: unknown } = {}
+  options: { method?: string; body?: unknown; timeoutMs?: number } = {}
 ): Promise<T> {
   const hasBody = options.body !== undefined;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
   let res: Response;
   try {
     res = await fetch(`${BASE}${path}`, {
       method: options.method ?? "GET",
       headers: hasBody ? { "Content-Type": "application/json" } : undefined,
       body: hasBody ? JSON.stringify(options.body) : undefined,
+      signal: controller.signal,
     });
-  } catch {
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      throw new ApiError(`The request took longer than ${Math.round(timeoutMs / 1000)}s and was cancelled.`, 0);
+    }
     throw new ApiError(`Cannot reach the backend at ${BASE}. Is it running?`, 0);
+  } finally {
+    clearTimeout(timer);
   }
 
   if (res.status === 204) return undefined as T;

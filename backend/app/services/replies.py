@@ -1,8 +1,9 @@
 """Replies, follow-ups and meetings. Runs inside the same job queue as the rest of the pipeline."""
+import random
 import uuid
 from datetime import timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.agents import conversation, followup
@@ -62,6 +63,76 @@ def receive_reply(db: Session, prospect_id: str, channel: str, text: str) -> dic
     pipeline.recompute_funnel(db, c)
     db.commit()
     return {"accepted": m.status == "received", "messageId": m.id, "state": p.state}
+
+# Canned replies for the demo helper below, grouped by the intent they're meant to trigger.
+# These are realistic-looking prospect replies, not agent output - the conversation agent still
+# classifies them itself, exactly as it would a real inbound message.
+SIMULATED_REPLIES: dict[str, list[str]] = {
+    "interested": [
+        "This looks interesting, tell me more about how it works.",
+        "Yeah, we've been looking for something like this. What's the next step?",
+    ],
+    "wants_meeting": [
+        "Sure, happy to chat. Do you have time next Tuesday afternoon?",
+        "Let's set up a call, I'm free most days next week.",
+    ],
+    "objection": [
+        "Not sure this fits our current stack, we already use a similar tool.",
+        "This seems pricey for what we need right now.",
+    ],
+    "question": [
+        "Does this integrate with Salesforce? We'd need that before considering it.",
+        "How does pricing work for a team of our size?",
+    ],
+    "not_interested": [
+        "Thanks but we're not interested at this time.",
+        "Please take us off your list, this isn't relevant to us.",
+    ],
+    "unsubscribe": [
+        "Please remove me from this list, not interested in further emails.",
+        "Stop contacting me.",
+    ],
+    "out_of_office": [
+        "I'm currently out of office until next Monday, will respond then.",
+        "Auto-reply: I am OOO through Friday.",
+    ],
+}
+
+
+def simulate_reply(db: Session, c: Campaign, prospect_id: str | None = None, intent: str | None = None) -> dict:
+    """Demo helper: feeds a realistic canned reply to a prospect exactly as if it had arrived over
+    email/SMS/LinkedIn, so a live demo can show the conversation/follow-up agents reacting without
+    waiting on a real inbound webhook. If prospect_id is omitted, picks a random prospect in this
+    campaign that's actually waiting for a response. If intent is omitted, picks one at random."""
+    if intent is not None and intent not in SIMULATED_REPLIES:
+        raise ServiceError(f"Unknown intent {intent!r}. Choose one of: {', '.join(SIMULATED_REPLIES)}", 422)
+
+    if prospect_id:
+        p = get_prospect(db, prospect_id)
+        if p.campaign_id != c.id:
+            raise ServiceError("That prospect is not in this campaign", 404)
+    else:
+        p = db.scalar(
+            select(CampaignProspect)
+            .where(CampaignProspect.campaign_id == c.id, CampaignProspect.state.in_(("WAITING_FOR_RESPONSE", "FOLLOWUP_DUE")))
+            .order_by(func.random())
+            .limit(1)
+        )
+        if p is None:
+            raise ServiceError("No prospects in this campaign are currently waiting for a response", 409)
+
+    picked_intent = intent or random.choice(list(SIMULATED_REPLIES))
+    text = random.choice(SIMULATED_REPLIES[picked_intent])
+    channel = db.scalar(
+        select(ProspectMessage.channel).where(
+            ProspectMessage.prospect_id == p.id, ProspectMessage.direction == "out",
+            ProspectMessage.status.in_(("sent", "sandbox")),
+        ).order_by(ProspectMessage.created_at.desc()).limit(1)
+    ) or "email"
+
+    result = receive_reply(db, p.id, channel, text)
+    return {**result, "prospectId": p.id, "prospectName": p.name, "simulatedIntent": picked_intent,
+            "channel": channel, "text": text}
 
 
 def _claim(db: Session, prospect_id: str) -> ProspectMessage | None:

@@ -80,12 +80,22 @@ def parse_dronahq_payload(content: object) -> dict:
     raise DronaHQResponseError(f"Unexpected response structure from DronaHQ: expected dict or JSON string, got {type(content).__name__}")
 
 
+# DronaHQ's own webhook likely calls an LLM, so the read timeout can't be too aggressive - but
+# 45s is excessive for a system that has a working local fallback. Connect gets its own, much
+# shorter timeout: if DronaHQ is unreachable (DNS failure, firewall drop, service down), we want
+# to find out in a few seconds and fall back, not wait out most of a minute for a connection that
+# was never going to happen. Both are configurable without a code change.
+DEFAULT_CONNECT_TIMEOUT = float(os.getenv("DRONAHQ_CONNECT_TIMEOUT_SECONDS", "5.0"))
+DEFAULT_READ_TIMEOUT = float(os.getenv("DRONAHQ_TIMEOUT_SECONDS", "20.0"))
+
+
 def call_webhook(
     agent_name: str,
     payload: dict,
     campaign_id: str = "",
     prospect_id: str = "",
-    timeout: float = 45.0,
+    timeout: float | None = None,
+    connect_timeout: float | None = None,
 ) -> dict:
     """Sends a request to the DronaHQ agent webhook and returns the parsed dictionary."""
     url, key = get_config(agent_name)
@@ -98,17 +108,21 @@ def call_webhook(
     if key:
         headers[header_name] = f"{prefix}{key}"
 
+    read_timeout = DEFAULT_READ_TIMEOUT if timeout is None else timeout
+    conn_timeout = DEFAULT_CONNECT_TIMEOUT if connect_timeout is None else connect_timeout
+    httpx_timeout = httpx.Timeout(connect=conn_timeout, read=read_timeout, write=10.0, pool=conn_timeout)
+
     start_time = time.time()
     log.info("[DRONAHQ] Request started: agent=%s campaign=%s prospect=%s", agent_name, campaign_id, prospect_id)
 
     try:
-        with httpx.Client(timeout=timeout) as client:
+        with httpx.Client(timeout=httpx_timeout) as client:
             response = client.post(url, json=payload, headers=headers)
         response.raise_for_status()
     except httpx.TimeoutException as e:
         elapsed = time.time() - start_time
         log.warning("[DRONAHQ] Request timed out after %.2fs: agent=%s prospect=%s", elapsed, agent_name, prospect_id)
-        raise DronaHQError(f"DronaHQ webhook call timed out ({timeout}s)") from e
+        raise DronaHQError(f"DronaHQ webhook call timed out (connect={conn_timeout}s, read={read_timeout}s)") from e
     except httpx.HTTPStatusError as e:
         elapsed = time.time() - start_time
         log.warning("[DRONAHQ] HTTP error %d after %.2fs: agent=%s prospect=%s", e.response.status_code, elapsed, agent_name, prospect_id)

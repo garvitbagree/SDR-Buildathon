@@ -1,8 +1,9 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.tables import ActivityEvent, CampaignStats, utcnow
+from app.models.tables import ActivityEvent, AgentJob, CampaignProspect, CampaignStats, ProspectMessage, utcnow
 from app.services.campaign_service import ServiceError, get_or_404
+
 
 EMPTY_STATS = {
     "outreach": {"linkedin": 0, "email": 0, "sms": 0, "voice": 0},
@@ -57,9 +58,40 @@ def list_events(db: Session, campaign_id: str, limit: int = 100) -> list[dict]:
 
 
 def get_stats(db: Session, campaign_id: str) -> dict:
+    """Seeded numbers for a campaign that has not run. Real numbers, counted from the database, once it has."""
     get_or_404(db, campaign_id)
-    row = db.get(CampaignStats, campaign_id)
-    return row.data if row else EMPTY_STATS
+    has_run = db.scalar(select(func.count()).select_from(CampaignProspect).where(CampaignProspect.campaign_id == campaign_id))
+    if not has_run:
+        row = db.get(CampaignStats, campaign_id)
+        return row.data if row else EMPTY_STATS
+
+    outreach = {"linkedin": 0, "email": 0, "sms": 0, "voice": 0}
+    followups = 0
+    for m in db.scalars(select(ProspectMessage).where(
+        ProspectMessage.campaign_id == campaign_id, ProspectMessage.direction == "out",
+        ProspectMessage.status.in_(("sent", "sandbox")),
+    )).all():
+        if m.kind == "followup":
+            followups += 1
+        if m.kind in ("first_touch", "followup") and m.channel in outreach:
+            outreach[m.channel] += 1
+
+    outcomes = {"positive": 0, "negative": 0, "neutral": 0}
+    for m in db.scalars(select(ProspectMessage).where(
+        ProspectMessage.campaign_id == campaign_id, ProspectMessage.direction == "in", ProspectMessage.status == "processed",
+    )).all():
+        s = (m.meta or {}).get("sentiment", "neutral")
+        outcomes[s if s in outcomes else "neutral"] += 1
+
+    jobs = dict(db.execute(
+        select(AgentJob.status, func.count()).where(AgentJob.campaign_id == campaign_id).group_by(AgentJob.status)
+    ).all())
+    return {
+        "outreach": outreach,
+        "followups": followups,
+        "outcomes": outcomes,
+        "workflows": {"active": jobs.get("queued", 0) + jobs.get("running", 0), "completed": jobs.get("done", 0), "failed": jobs.get("dead", 0)},
+    }
 
 
 def decide(db: Session, event_id: str, decision: str) -> dict:

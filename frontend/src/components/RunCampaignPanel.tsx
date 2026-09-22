@@ -53,6 +53,8 @@ export default function RunCampaignPanel() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [loadError, setLoadError] = useState("");
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   const [target, setTarget] = useState("5");
   const [industries, setIndustries] = useState("");
@@ -65,6 +67,7 @@ export default function RunCampaignPanel() {
     try {
       setData(await api<Pipeline>(`/campaigns/${id}/pipeline`));
       setLoadError("");
+      setUpdatedAt(new Date());
     } catch (e) {
       // keep the last numbers, the next refresh will try again
       setLoadError(e instanceof ApiError ? e.message : "Something went wrong");
@@ -78,6 +81,15 @@ export default function RunCampaignPanel() {
     }, 5000);
     return () => clearInterval(timer);
   }, [load]);
+
+  useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(tick);
+  }, []);
+
+  const secondsAgo = updatedAt ? Math.max(0, Math.round((now - updatedAt.getTime()) / 1000)) : null;
+  const staleAfterMs = 15000;
+  const isStale = updatedAt ? now - updatedAt.getTime() > staleAfterMs : false;
 
   const message = (e: unknown) => (e instanceof ApiError ? e.message : "Something went wrong");
 
@@ -152,6 +164,14 @@ export default function RunCampaignPanel() {
                 Agents are working
               </span>
             )}
+            {hasRun && (
+              <span
+                className={`flex items-center gap-1.5 text-xs font-normal ${isStale ? "text-amber-600" : "text-muted-foreground"}`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${isStale ? "bg-amber-500" : "bg-emerald-500 animate-pulse"}`} />
+                {secondsAgo === null ? "" : secondsAgo <= 1 ? "Updated just now" : `Updated ${secondsAgo}s ago`}
+              </span>
+            )}
           </div>
           <p className="text-xs text-muted-foreground">
             {hasRun
@@ -185,6 +205,7 @@ export default function RunCampaignPanel() {
           <Stat label="Contacted" value={data.sent} />
           <Stat label="Failed" value={data.failed} />
           <Stat label="Model cost" value={`$${data.cost.usd.toFixed(4)}`} />
+          <Stat label="Cost / qualified" value={data.cost.perQualified ? `$${data.cost.perQualified.toFixed(4)}` : "—"} />
         </div>
       )}
 

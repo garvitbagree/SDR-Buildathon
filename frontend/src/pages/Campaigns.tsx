@@ -75,6 +75,14 @@ function StatCard({
   );
 }
 
+const statusRowTint: Record<string, string> = {
+  live: "bg-emerald-50/40",
+  paused: "bg-amber-50/50",
+  draft: "bg-slate-50/60",
+  completed: "bg-sky-50/40",
+  archived: "bg-stone-50/60",
+};
+
 export default function Campaigns() {
   const { campaigns, killSwitch, setStatus, duplicateCampaign, reps: allReps } = useControl();
   const navigate = useNavigate();
@@ -210,7 +218,7 @@ export default function Campaigns() {
                 <TableRow
                   key={c.id}
                   onClick={() => navigate(`/campaigns/${c.id}`)}
-                  className={`cursor-pointer ${c.status === "paused" ? "bg-amber-50/50" : ""}`}
+                  className={`cursor-pointer ${statusRowTint[c.status] ?? ""}`}
                 >
                   <TableCell className="pl-5">
                     <div className="font-medium">{c.name}</div>

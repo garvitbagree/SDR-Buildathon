@@ -22,8 +22,8 @@ const nav = [
   { to: "/prompts", label: "Prompts", icon: FileText },
   { to: "/reps", label: "Reps", icon: Users },
   { to: "/conflicts", label: "Conflicts", icon: GitMerge },
-  { to: "/settings", label: "Settings", icon: Settings },
 ];
+const bottomNav = [{ to: "/settings", label: "Settings", icon: Settings }];
 
 export default function AppLayout() {
   const { campaigns, killSwitch, setKillSwitch, error, clearError } = useControl();
@@ -91,6 +91,26 @@ export default function AppLayout() {
                   {openCount}
                 </span>
               )}
+            </NavLink>
+          ))}
+        </nav>
+
+        <nav className="space-y-1 border-t p-2">
+          {bottomNav.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              title={label}
+              className={({ isActive }) =>
+                cn(
+                  "flex h-10 items-center gap-3 rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                  collapsed && "justify-center px-0",
+                  isActive && "bg-primary font-medium text-primary-foreground hover:bg-primary hover:text-primary-foreground"
+                )
+              }
+            >
+              <Icon className="h-5 w-5" />
+              {!collapsed && <span className="truncate">{label}</span>}
             </NavLink>
           ))}
         </nav>

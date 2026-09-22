@@ -28,11 +28,9 @@ import {
 } from "@/components/ui/table";
 import { useControl } from "@/context/ControlContext";
 import {
-  CURRENT_USER_ID,
   useSettings,
   type Integration,
   type IntegrationStatus,
-  type Role,
 } from "@/context/SettingsContext";
 
 const tabs = [
@@ -41,7 +39,6 @@ const tabs = [
   { key: "guardrails", label: "Guardrails" },
   { key: "knowledge", label: "Knowledge bases" },
   { key: "suppression", label: "Do-not-contact" },
-  { key: "team", label: "Team and access" },
 ] as const;
 
 type TabKey = (typeof tabs)[number]["key"];
@@ -52,13 +49,6 @@ const statusStyles: Record<IntegrationStatus, { label: string; cls: string }> = 
   error: { label: "Needs attention", cls: "border-red-200 bg-red-50 text-red-700" },
 };
 
-const roleInfo: Record<Role, { label: string; desc: string }> = {
-  admin: { label: "Admin", desc: "Everything, including settings, the kill switch and team access" },
-  manager: { label: "Manager", desc: "Create and edit campaigns and prompts, pause and resume" },
-  viewer: { label: "Viewer", desc: "Read-only access to dashboards and history" },
-};
-
-const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
 function Pill({ cls, children }: { cls: string; children: ReactNode }) {
   return (
@@ -391,7 +381,7 @@ function ModelsTab() {
 
 function GuardrailsTab() {
   const { killSwitch, setKillSwitch } = useControl();
-  const { guardrails, toggleGuardrail, policies, setPolicies } = useSettings();
+  const { policies, setPolicies } = useSettings();
 
   return (
     <div className="space-y-6">
@@ -420,23 +410,8 @@ function GuardrailsTab() {
         </div>
       </Panel>
 
-      <Panel title="Platform guardrails" subtitle="Apply to every campaign, and campaigns cannot switch them off">
-        <ul className="divide-y">
-          {guardrails.map((g) => (
-            <SwitchRow
-              key={g.id}
-              label={g.label}
-              hint={g.hint}
-              checked={g.enabled}
-              locked={g.locked}
-              onChange={() => toggleGuardrail(g.id)}
-            />
-          ))}
-        </ul>
-      </Panel>
-
-      <Panel title="Sending policy" subtitle="Organisation-wide limits">
-        <div className="grid gap-6 p-5 md:grid-cols-2">
+      <Panel title="Sending cap" subtitle="Organisation-wide limit, enforced by the guard on every send">
+        <div className="p-5">
           <NumberField
             label="Platform daily cap"
             hint="Maximum outreach actions per day across all campaigns"
@@ -445,51 +420,6 @@ function GuardrailsTab() {
             max={100000}
             onCommit={(n) => setPolicies({ dailyCap: n })}
           />
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium">Sending window</label>
-            <div className="flex items-center gap-2">
-              <Select
-                value={String(policies.windowStart)}
-                onValueChange={(v) => {
-                  const start = Number(v);
-                  setPolicies({
-                    windowStart: start,
-                    windowEnd: Math.max(policies.windowEnd, start + 1),
-                  });
-                }}
-              >
-                <SelectTrigger className="w-28">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {HOURS.slice(0, 23).map((h) => (
-                    <SelectItem key={h} value={String(h)}>
-                      {h}:00
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <span className="text-sm text-muted-foreground">to</span>
-              <Select
-                value={String(policies.windowEnd)}
-                onValueChange={(v) => setPolicies({ windowEnd: Number(v) })}
-              >
-                <SelectTrigger className="w-28">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {HOURS.filter((h) => h > policies.windowStart).map((h) => (
-                    <SelectItem key={h} value={String(h)}>
-                      {h}:00
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Agents send only inside this window, in the prospect's local time
-            </p>
-          </div>
         </div>
       </Panel>
     </div>
@@ -734,170 +664,9 @@ function SuppressionTab() {
   );
 }
 
-function TeamTab() {
-  const { users, auth, setAuth, inviteUser, setUserRole, removeUser } = useSettings();
-  const [inviting, setInviting] = useState(false);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<Role>("manager");
-  const [error, setError] = useState("");
-
-  const close = () => {
-    setInviting(false);
-    setName("");
-    setEmail("");
-    setRole("manager");
-    setError("");
-  };
-
-  const invite = async () => {
-    const err = await inviteUser(name, email, role);
-    setError(err);
-    if (!err) close();
-  };
-
-  return (
-    <div className="space-y-6">
-      <Panel title="Sign-in" subtitle="How people authenticate">
-        <ul className="divide-y">
-          <SwitchRow
-            label="Require single sign-on"
-            hint="Everyone signs in through the company identity provider"
-            checked={auth.sso}
-            onChange={() => setAuth({ sso: !auth.sso })}
-          />
-          <SwitchRow
-            label="Require 2-step verification"
-            hint="A second factor on every sign-in"
-            checked={auth.mfa}
-            onChange={() => setAuth({ mfa: !auth.mfa })}
-          />
-        </ul>
-      </Panel>
-
-      <Panel
-        title="Team"
-        subtitle="Who can use the control plane"
-        action={
-          <Button size="sm" onClick={() => setInviting(true)}>
-            <Plus className="mr-1.5 h-4 w-4" />
-            Invite
-          </Button>
-        }
-      >
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="pl-5">Person</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead className="w-12 pr-5" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {users.map((u) => {
-              const me = u.id === CURRENT_USER_ID;
-              return (
-                <TableRow key={u.id}>
-                  <TableCell className="pl-5">
-                    <div className="font-medium">
-                      {u.name}
-                      {me && <span className="ml-2 text-xs font-normal text-muted-foreground">You</span>}
-                    </div>
-                    <div className="text-xs text-muted-foreground">{u.email}</div>
-                  </TableCell>
-                  <TableCell>
-                    <Select
-                      value={u.role}
-                      disabled={me}
-                      onValueChange={(v) => setUserRole(u.id, v as Role)}
-                    >
-                      <SelectTrigger className="w-36">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(Object.keys(roleInfo) as Role[]).map((r) => (
-                          <SelectItem key={r} value={r}>
-                            {roleInfo[r].label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell className="pr-5 text-right">
-                    {!me && (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8"
-                        aria-label={`Remove ${u.name}`}
-                        onClick={() => removeUser(u.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-        <ul className="space-y-1 border-t px-5 py-4 text-xs text-muted-foreground">
-          {(Object.keys(roleInfo) as Role[]).map((r) => (
-            <li key={r}>
-              <span className="font-medium text-foreground">{roleInfo[r].label}:</span> {roleInfo[r].desc}
-            </li>
-          ))}
-        </ul>
-      </Panel>
-
-      {inviting && (
-        <Dialog open onOpenChange={(o) => !o && close()}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Invite a teammate</DialogTitle>
-              <DialogDescription>They get access at the role you pick.</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">Name</label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">Email</label>
-                <Input value={email} onChange={(e) => setEmail(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium">Role</label>
-                <Select value={role} onValueChange={(v) => setRole(v as Role)}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(Object.keys(roleInfo) as Role[]).map((r) => (
-                      <SelectItem key={r} value={r}>
-                        {roleInfo[r].label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {error && <p className="text-xs text-red-600">{error}</p>}
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={close}>
-                Cancel
-              </Button>
-              <Button onClick={invite}>Send invite</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
-    </div>
-  );
-}
 
 export default function Settings() {
-  const [tab, setTab] = useState<TabKey>("integrations");
+  const [tab, setTab] = useState<TabKey>("models");
 
   return (
     <div className="space-y-6">
@@ -924,7 +693,6 @@ export default function Settings() {
       {tab === "guardrails" && <GuardrailsTab />}
       {tab === "knowledge" && <KnowledgeTab />}
       {tab === "suppression" && <SuppressionTab />}
-      {tab === "team" && <TeamTab />}
     </div>
   );
 }

@@ -309,19 +309,8 @@ function FormBody({ campaign }: { campaign?: Campaign }) {
                   aria-invalid={submitted && !!errors.name}
                 />
               </Field>
-              <Field label="Owner">
-                <Select value={f.owner} onValueChange={(v) => set("owner", v)}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {OWNERS.map((o) => (
-                      <SelectItem key={o} value={o}>
-                        {o}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <Field label="Owner" hint="Who this campaign runs under, shown as the sign-off on outreach">
+                <Input value={f.owner} onChange={(e) => set("owner", e.target.value)} placeholder="Who is this campaign run by?" />
               </Field>
               <div className="md:col-span-2">
                 <Field label="Description" hint="One or two lines on the goal of this campaign">

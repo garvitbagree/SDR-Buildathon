@@ -4,10 +4,11 @@ Multi-channel autonomous SDR system: a campaign control plane (React + FastAPI)
 plus an agentic outreach engine built on DronaHQ.
 
 ## Structure
-- `frontend/`  React + Vite + TypeScript control plane UI
-- `backend/`   FastAPI service (campaigns, prompts, reps, controls)
-- `agents/`    AI agents and RAG code
-- `docs/`      Architecture diagram and report
+- `frontend/`          React + Vite + TypeScript control plane UI
+- `backend/`           FastAPI service (campaigns, prompts, reps, controls)
+- `backend/app/agents/`        The 7 SDR agents (ICP fitment, research, strategy, personalisation, conversation, follow-up, voice)
+- `backend/app/integrations/dronahq/`  DronaHQ webhook integration (ICP + personalisation), with local-LLM fallback
+- `docs/`              Architecture diagram and report
 
 ## Setup
 ### Backend

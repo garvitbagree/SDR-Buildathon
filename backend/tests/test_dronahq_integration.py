@@ -142,6 +142,10 @@ def test_full_pipeline_with_dronahq_5_prospects():
         DRONA_PERSONALISATION_API_KEY="drona_pers_token",
         ICP_PROVIDER="dronahq",
         PERSONALISATION_PROVIDER="dronahq",
+        # .env pins these to the real webhook's "api-key" header; this test asserts
+        # Authorization: Bearer, so pin them explicitly rather than inherit .env.
+        DRONAHQ_AUTH_HEADER="Authorization",
+        DRONAHQ_AUTH_PREFIX="Bearer ",
     )
     llm._pool = None
 

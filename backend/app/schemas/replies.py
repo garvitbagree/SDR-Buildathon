@@ -14,3 +14,8 @@ class DaysIn(CamelModel):
 
 class CallTurnIn(CamelModel):
     said: str = Field(min_length=1, max_length=2000)
+
+
+class SimulateReplyIn(CamelModel):
+    prospect_id: str | None = None
+    intent: str | None = None

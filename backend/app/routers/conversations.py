@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models.tables import Campaign, CampaignProspect, ProspectMessage
-from app.schemas.replies import CallTurnIn, DaysIn, ReplyIn
+from app.schemas.replies import CallTurnIn, DaysIn, ReplyIn, SimulateReplyIn
 from app.services import calls, outreach, replies
 from app.services.campaign_service import ServiceError, get_or_404
 
@@ -26,10 +26,14 @@ def list_messages(prospect_id: str, db: Session = Depends(get_db)):
     replies.get_prospect(db, prospect_id)
     return replies.messages(db, prospect_id)
 
-
 @router.post("/prospects/{prospect_id}/reply", status_code=202)
 def reply(prospect_id: str, body: ReplyIn, db: Session = Depends(get_db)):
     return replies.receive_reply(db, prospect_id, body.channel, body.text)
+
+
+@router.post("/campaigns/{campaign_id}/simulate-reply", status_code=202)
+def simulate_reply(campaign_id: str, body: SimulateReplyIn, db: Session = Depends(get_db)):
+    return replies.simulate_reply(db, get_or_404(db, campaign_id), body.prospect_id, body.intent)
 
 
 @router.post("/messages/{message_id}/send")
