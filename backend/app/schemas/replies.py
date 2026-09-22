@@ -23,3 +23,4 @@ class SimulateReplyIn(CamelModel):
 
 class SimulateRepliesIn(CamelModel):
     count: int = Field(ge=1, le=50, default=5)
+    intent: str | None = None

@@ -567,8 +567,6 @@ export default function CampaignDashboard() {
         />
       </div>
 
-      <ProspectsPanel campaignId={c.id} />
-
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <Panel title="Prospect funnel" subtitle="Percentage is conversion from the previous stage">
           {c.funnel.discovered === 0 ? (
@@ -650,6 +648,8 @@ export default function CampaignDashboard() {
           )}
         </Panel>
       </div>
+
+      <ProspectsPanel campaignId={c.id} />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <Panel title="Channels" subtitle="Outreach activity and channel pause">

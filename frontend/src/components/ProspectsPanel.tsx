@@ -266,14 +266,22 @@ function ProspectDrawer({ prospectId, onClose, onChanged }: { prospectId: string
   );
 }
 
+const PAGE_SIZE = 10;
+
 export default function ProspectsPanel({ campaignId }: { campaignId: string }) {
   const { prospects, loadError, reload } = useProspects(campaignId);
   const [openId, setOpenId] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
+  const [visible, setVisible] = useState(PAGE_SIZE);
 
   const filtered = filter
     ? prospects.filter((p) => `${p.name} ${p.company} ${p.title} ${p.state}`.toLowerCase().includes(filter.toLowerCase()))
     : prospects;
+  const shown = filtered.slice(0, visible);
+
+  useEffect(() => {
+    setVisible(PAGE_SIZE); // filtering starts a fresh page, rather than showing a half-filled list
+  }, [filter]);
 
   return (
     <section className="rounded-xl border bg-card">
@@ -295,30 +303,39 @@ export default function ProspectsPanel({ campaignId }: { campaignId: string }) {
       {prospects.length === 0 ? (
         <div className="p-10 text-center text-sm text-muted-foreground">No prospects yet.</div>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="pl-5">Name</TableHead>
-              <TableHead>Title</TableHead>
-              <TableHead>Company</TableHead>
-              <TableHead>State</TableHead>
-              <TableHead className="pr-5">Score</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.map((p) => (
-              <TableRow key={p.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setOpenId(p.id)}>
-                <TableCell className="pl-5 font-medium">{p.name}</TableCell>
-                <TableCell>{p.title || "—"}</TableCell>
-                <TableCell>{p.company || "—"}</TableCell>
-                <TableCell>
-                  <Pill cls={stateStyle(p.state)}>{stateLabel(p.state)}</Pill>
-                </TableCell>
-                <TableCell className="pr-5">{p.score ?? "—"}</TableCell>
+        <>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pl-5">Name</TableHead>
+                <TableHead>Title</TableHead>
+                <TableHead>Company</TableHead>
+                <TableHead>State</TableHead>
+                <TableHead className="pr-5">Score</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {shown.map((p) => (
+                <TableRow key={p.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setOpenId(p.id)}>
+                  <TableCell className="pl-5 font-medium">{p.name}</TableCell>
+                  <TableCell>{p.title || "—"}</TableCell>
+                  <TableCell>{p.company || "—"}</TableCell>
+                  <TableCell>
+                    <Pill cls={stateStyle(p.state)}>{stateLabel(p.state)}</Pill>
+                  </TableCell>
+                  <TableCell className="pr-5">{p.score ?? "—"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          {filtered.length > shown.length && (
+            <div className="flex justify-center border-t py-3">
+              <Button variant="outline" size="sm" onClick={() => setVisible((v) => v + PAGE_SIZE)}>
+                Load {Math.min(PAGE_SIZE, filtered.length - shown.length)} more ({shown.length} of {filtered.length})
+              </Button>
+            </div>
+          )}
+        </>
       )}
 
       {openId && <ProspectDrawer prospectId={openId} onClose={() => setOpenId(null)} onChanged={reload} />}

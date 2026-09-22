@@ -44,7 +44,7 @@ def simulate_reply(campaign_id: str, body: SimulateReplyIn, db: Session = Depend
 
 @router.post("/campaigns/{campaign_id}/simulate-replies", status_code=202)
 def simulate_replies_batch(campaign_id: str, body: SimulateRepliesIn, db: Session = Depends(get_db)):
-    return replies.simulate_replies(db, get_or_404(db, campaign_id), body.count)
+    return replies.simulate_replies(db, get_or_404(db, campaign_id), body.count, body.intent)
 
 
 @router.post("/messages/{message_id}/send")

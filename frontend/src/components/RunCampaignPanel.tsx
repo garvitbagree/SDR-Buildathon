@@ -162,6 +162,7 @@ export default function RunCampaignPanel() {
   const [sizeMin, setSizeMin] = useState("50");
   const [sizeMax, setSizeMax] = useState("1000");
   const [batchCount, setBatchCount] = useState(5);
+  const [simulateIntent, setSimulateIntent] = useState<string | undefined>(undefined);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -244,26 +245,6 @@ export default function RunCampaignPanel() {
     }
   };
 
-  const simulateReply = async (intent?: string) => {
-    setBusy(true);
-    setError("");
-    setNotice("");
-    try {
-      const r = await api<SimulateReplyResult>(`/campaigns/${id}/simulate-reply`, {
-        method: "POST",
-        body: intent ? { intent } : {},
-      });
-      setNotice(
-        `Simulated a "${r.simulatedIntent.replace(/_/g, " ")}" reply from ${r.prospectName} over ${r.channel}.`
-      );
-      await load();
-    } catch (e) {
-      setError(message(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const adjustTarget = async (newTarget: number) => {
     if (!Number.isInteger(newTarget) || newTarget < 1 || newTarget > 500) {
       return setError("Target must be a whole number from 1 to 500");
@@ -296,12 +277,13 @@ export default function RunCampaignPanel() {
     try {
       const r = await api<SimulateRepliesResult>(`/campaigns/${id}/simulate-replies`, {
         method: "POST",
-        body: { count: batchCount },
+        body: { count: batchCount, ...(simulateIntent ? { intent: simulateIntent } : {}) },
       });
+      const label = SIMULATE_INTENTS.find((o) => o.key === simulateIntent)?.label ?? "Random";
       setNotice(
         r.simulated < r.requested
-          ? `Simulated ${r.simulated} of ${r.requested} requested replies. No more prospects were waiting for a response.`
-          : `Simulated ${r.simulated} random replies.`
+          ? `Simulated ${r.simulated} of ${r.requested} requested "${label}" replies. No more prospects were waiting for a response.`
+          : `Simulated ${r.simulated} "${label}" repl${r.simulated === 1 ? "y" : "ies"}.`
       );
       await load();
     } catch (e) {
@@ -355,25 +337,7 @@ export default function RunCampaignPanel() {
             </Button>
           )}
           {hasRun && data.sent > 0 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" disabled={busy}>
-                  <MessageSquareReply className="mr-1.5 h-4 w-4" />
-                  Simulate reply
-                  <ChevronDown className="ml-1.5 h-4 w-4 text-muted-foreground" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                {SIMULATE_INTENTS.map((opt) => (
-                  <DropdownMenuItem key={opt.label} onSelect={() => simulateReply(opt.key)}>
-                    {opt.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-          {hasRun && data.sent > 0 && (
-            <div className="flex items-center gap-1.5 rounded-md border pl-2 pr-1">
+            <div className="flex items-center gap-1.5 rounded-md border pl-1 pr-1">
               <Input
                 type="number"
                 min={1}
@@ -384,10 +348,26 @@ export default function RunCampaignPanel() {
                   const n = Number(e.target.value);
                   if (Number.isInteger(n)) setBatchCount(Math.min(MAX_SIMULATE_BATCH, Math.max(1, n)));
                 }}
-                className="h-7 w-14 border-0 p-0 text-center focus-visible:ring-0"
+                className="h-7 w-14 border-0 text-center focus-visible:ring-0"
               />
-              <Button size="sm" variant="ghost" disabled={busy} onClick={simulateBatch} className="h-7">
-                Simulate {batchCount} random
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" disabled={busy} className="h-7 gap-1 px-2">
+                    {SIMULATE_INTENTS.find((o) => o.key === simulateIntent)?.label ?? "Random"}
+                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  {SIMULATE_INTENTS.map((opt) => (
+                    <DropdownMenuItem key={opt.label} onSelect={() => setSimulateIntent(opt.key)}>
+                      {opt.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button size="sm" disabled={busy} onClick={simulateBatch} className="h-7">
+                <MessageSquareReply className="mr-1.5 h-3.5 w-3.5" />
+                Simulate
               </Button>
             </div>
           )}
