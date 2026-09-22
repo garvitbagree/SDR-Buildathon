@@ -42,6 +42,7 @@ type SimulateReplyResult = {
   simulatedIntent: string;
   channel: string;
 };
+type SimulateRepliesResult = { requested: number; simulated: number; replies: SimulateReplyResult[] };
 
 const SIMULATE_INTENTS: { key: string | undefined; label: string }[] = [
   { key: undefined, label: "Random" },
@@ -54,6 +55,8 @@ const SIMULATE_INTENTS: { key: string | undefined; label: string }[] = [
   { key: "out_of_office", label: "Out of office" },
 ];
 
+const MAX_SIMULATE_BATCH = 50;
+
 const splitList = (text: string) =>
   text
     .split(",")
@@ -65,6 +68,79 @@ function Stat({ label, value }: { label: string; value: string | number }) {
     <div className="min-w-[6.5rem]">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="text-lg font-semibold tabular-nums">{value}</div>
+    </div>
+  );
+}
+
+function EditableTargetStat({
+  qualified,
+  target,
+  busy,
+  onSave,
+}: {
+  qualified: number;
+  target: number;
+  busy: boolean;
+  onSave: (n: number) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(String(target));
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => {
+          setDraft(String(target));
+          setEditing(true);
+        }}
+        className="min-w-[6.5rem] rounded text-left hover:bg-muted/60"
+      >
+        <div className="text-xs text-muted-foreground">Qualified (click to edit target)</div>
+        <div className="text-lg font-semibold tabular-nums">
+          {qualified} / {target}
+        </div>
+      </button>
+    );
+  }
+
+  return (
+    <div className="min-w-[9rem]">
+      <div className="text-xs text-muted-foreground">Qualified target</div>
+      <div className="mt-0.5 flex items-center gap-1">
+        <Input
+          type="number"
+          min={1}
+          max={500}
+          autoFocus
+          value={draft}
+          disabled={busy}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              onSave(Number(draft));
+              setEditing(false);
+            }
+            if (e.key === "Escape") setEditing(false);
+          }}
+          className="h-7 w-16 px-1.5"
+        />
+        <Button
+          size="sm"
+          className="h-7 px-2"
+          disabled={busy}
+          onClick={() => {
+            onSave(Number(draft));
+            setEditing(false);
+          }}
+        >
+          Save
+        </Button>
+        <Button size="sm" variant="ghost" className="h-7 px-2" disabled={busy} onClick={() => setEditing(false)}>
+          Cancel
+        </Button>
+      </div>
     </div>
   );
 }
@@ -85,6 +161,7 @@ export default function RunCampaignPanel() {
   const [pains, setPains] = useState("");
   const [sizeMin, setSizeMin] = useState("50");
   const [sizeMax, setSizeMax] = useState("1000");
+  const [batchCount, setBatchCount] = useState(5);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -187,6 +264,53 @@ export default function RunCampaignPanel() {
     }
   };
 
+  const adjustTarget = async (newTarget: number) => {
+    if (!Number.isInteger(newTarget) || newTarget < 1 || newTarget > 500) {
+      return setError("Target must be a whole number from 1 to 500");
+    }
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const r = await api<{ previousTarget: number; targetCount: number; qualified: number }>(
+        `/campaigns/${id}/target`,
+        { method: "POST", body: { targetCount: newTarget } }
+      );
+      setNotice(
+        r.targetCount > r.previousTarget
+          ? `Target raised to ${r.targetCount}. Discovery will keep going until it's met.`
+          : `Target updated to ${r.targetCount}.`
+      );
+      await load();
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const simulateBatch = async () => {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const r = await api<SimulateRepliesResult>(`/campaigns/${id}/simulate-replies`, {
+        method: "POST",
+        body: { count: batchCount },
+      });
+      setNotice(
+        r.simulated < r.requested
+          ? `Simulated ${r.simulated} of ${r.requested} requested replies. No more prospects were waiting for a response.`
+          : `Simulated ${r.simulated} random replies.`
+      );
+      await load();
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (!data) {
     return (
       <div className="rounded-xl border bg-card p-5 text-sm text-muted-foreground">
@@ -239,7 +363,7 @@ export default function RunCampaignPanel() {
                   <ChevronDown className="ml-1.5 h-4 w-4 text-muted-foreground" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="w-56">
                 {SIMULATE_INTENTS.map((opt) => (
                   <DropdownMenuItem key={opt.label} onSelect={() => simulateReply(opt.key)}>
                     {opt.label}
@@ -247,6 +371,25 @@ export default function RunCampaignPanel() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
+          )}
+          {hasRun && data.sent > 0 && (
+            <div className="flex items-center gap-1.5 rounded-md border pl-2 pr-1">
+              <Input
+                type="number"
+                min={1}
+                max={MAX_SIMULATE_BATCH}
+                value={batchCount}
+                disabled={busy}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (Number.isInteger(n)) setBatchCount(Math.min(MAX_SIMULATE_BATCH, Math.max(1, n)));
+                }}
+                className="h-7 w-14 border-0 p-0 text-center focus-visible:ring-0"
+              />
+              <Button size="sm" variant="ghost" disabled={busy} onClick={simulateBatch} className="h-7">
+                Simulate {batchCount} random
+              </Button>
+            </div>
           )}
           {!hasRun && (
             <Button onClick={() => setOpen(true)}>
@@ -260,7 +403,7 @@ export default function RunCampaignPanel() {
       {hasRun && (
         <div className="mt-4 flex flex-wrap gap-x-6 gap-y-3">
           <Stat label="Discovered" value={data.discovered} />
-          <Stat label="Qualified" value={`${data.qualified} / ${data.targetCount}`} />
+          <EditableTargetStat qualified={data.qualified} target={data.targetCount} busy={busy} onSave={adjustTarget} />
           <Stat label="Personalised" value={data.personalised} />
           <Stat label="Awaiting review" value={data.awaitingReview} />
           <Stat label="Ready to send" value={data.readyToSend} />
