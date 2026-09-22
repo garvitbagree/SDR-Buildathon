@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Loader2, Play, Send } from "lucide-react";
+import { ChevronDown, Loader2, MessageSquareReply, Play, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -11,6 +11,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { api, ApiError } from "@/lib/api";
 
 type Pipeline = {
@@ -29,6 +35,24 @@ type Pipeline = {
 };
 
 type SendResult = { sent: number; notSent: number; stoppedBecause: string };
+type SimulateReplyResult = {
+  accepted: boolean;
+  prospectId: string;
+  prospectName: string;
+  simulatedIntent: string;
+  channel: string;
+};
+
+const SIMULATE_INTENTS: { key: string | undefined; label: string }[] = [
+  { key: undefined, label: "Random" },
+  { key: "interested", label: "Interested" },
+  { key: "wants_meeting", label: "Wants a meeting" },
+  { key: "objection", label: "Objection" },
+  { key: "question", label: "Question" },
+  { key: "not_interested", label: "Not interested" },
+  { key: "unsubscribe", label: "Unsubscribe" },
+  { key: "out_of_office", label: "Out of office" },
+];
 
 const splitList = (text: string) =>
   text
@@ -143,6 +167,26 @@ export default function RunCampaignPanel() {
     }
   };
 
+  const simulateReply = async (intent?: string) => {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const r = await api<SimulateReplyResult>(`/campaigns/${id}/simulate-reply`, {
+        method: "POST",
+        body: intent ? { intent } : {},
+      });
+      setNotice(
+        `Simulated a "${r.simulatedIntent.replace(/_/g, " ")}" reply from ${r.prospectName} over ${r.channel}.`
+      );
+      await load();
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (!data) {
     return (
       <div className="rounded-xl border bg-card p-5 text-sm text-muted-foreground">
@@ -185,6 +229,24 @@ export default function RunCampaignPanel() {
               <Send className="mr-1.5 h-4 w-4" />
               Send {data.readyToSend} ready
             </Button>
+          )}
+          {hasRun && data.sent > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" disabled={busy}>
+                  <MessageSquareReply className="mr-1.5 h-4 w-4" />
+                  Simulate reply
+                  <ChevronDown className="ml-1.5 h-4 w-4 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {SIMULATE_INTENTS.map((opt) => (
+                  <DropdownMenuItem key={opt.label} onSelect={() => simulateReply(opt.key)}>
+                    {opt.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
           {!hasRun && (
             <Button onClick={() => setOpen(true)}>
